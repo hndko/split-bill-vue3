@@ -1,5 +1,5 @@
 :root {
-  /* Neon Cyan Glassmorphism Color Palette */
+  /* Dark Mode Color Palette */
   --primary: #06b6d4;
   --primary-light: #22d3ee;
   --primary-dark: #0891b2;
@@ -12,13 +12,13 @@
   --neon-blue: #00d4ff;
   --neon-green: #39ff14;
 
-  --background: #0a1520;
-  --background-alt: #0d1f2d;
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-light: rgba(255, 255, 255, 0.1);
-  --surface-border: rgba(255, 255, 255, 0.15);
-  --text: #f0fdfa;
-  --text-muted: #94a3b8;
+  --background: #0f0f0f;
+  --background-alt: #1a1a1a;
+  --surface: #1e1e1e;
+  --surface-light: #2a2a2a;
+  --surface-border: #333333;
+  --text: #f5f5f5;
+  --text-muted: #a0a0a0;
   --danger: #f43f5e;
   --danger-light: #fb7185;
 
@@ -36,30 +36,18 @@
     #00f5ff 30%,
     #00ffcc 100%
   );
-  --gradient-hero: linear-gradient(
-    135deg,
-    #0a1520 0%,
-    #0d1f2d 50%,
-    #071318 100%
-  );
-  --gradient-glow: radial-gradient(
-    ellipse at 50% 0%,
-    rgba(6, 182, 212, 0.2) 0%,
-    transparent 70%
-  );
 
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: blur(20px);
+  /* Card backgrounds - solid dark */
+  --card-bg: #1a1a1a;
+  --card-border: #2a2a2a;
 
   /* Shadows & Glows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
-  --glow-cyan: 0 0 30px rgba(6, 182, 212, 0.4);
-  --glow-teal: 0 0 30px rgba(20, 184, 166, 0.4);
-  --glow-neon: 0 0 40px rgba(0, 245, 255, 0.4), 0 0 80px rgba(0, 255, 204, 0.2);
+  --glow-cyan: 0 0 30px rgba(6, 182, 212, 0.3);
+  --glow-teal: 0 0 30px rgba(20, 184, 166, 0.3);
+  --glow-neon: 0 0 40px rgba(0, 245, 255, 0.3), 0 0 80px rgba(0, 255, 204, 0.15);
 
   /* Border Radius */
   --radius-sm: 12px;
@@ -82,24 +70,12 @@
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Oxygen, Ubuntu, sans-serif;
-  background: var(--gradient-hero);
+  background: var(--background);
   color: var(--text);
   min-height: 100vh;
   line-height: 1.6;
   position: relative;
   overflow-x: hidden;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
-  background: var(--gradient-glow);
-  pointer-events: none;
-  z-index: 0;
 }
 
 #app {
@@ -166,34 +142,17 @@ h6 {
   font-weight: 400;
 }
 
-/* Glass Cards */
+/* Cards */
 .card {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--card-bg);
   border-radius: var(--radius-lg);
   padding: 28px;
   margin-bottom: 28px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--card-border);
   box-shadow: var(--shadow-lg);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
-}
-
-.card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
 }
 
 .card:hover {
@@ -247,7 +206,7 @@ h6 {
 .form-input {
   width: 100%;
   padding: 14px 18px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface);
   border: 2px solid var(--surface-border);
   border-radius: var(--radius-md);
   color: var(--text);
@@ -290,7 +249,7 @@ h6 {
 
 .toggle-btns {
   display: flex;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface);
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 2px solid var(--surface-border);
@@ -409,15 +368,15 @@ h6 {
   align-items: center;
   gap: 16px;
   padding: 18px 20px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface);
   border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   transition: all var(--transition-fast);
 }
 
 .item-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(6, 182, 212, 0.2);
+  background: var(--surface-light);
+  border-color: rgba(6, 182, 212, 0.3);
 }
 
 .item-row .item-name {
@@ -469,13 +428,13 @@ h6 {
 }
 
 .participant-tag.inactive {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
   color: var(--text-muted);
   box-shadow: none;
 }
 
 .participant-tag.inactive:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-light);
 }
 
 .participant-tag .remove {
@@ -494,43 +453,23 @@ h6 {
   background: var(--danger);
 }
 
-/* Result Card - Receipt/Nota Style */
+/* Result Card - Dark Mode Style */
 .result-card {
-  background: linear-gradient(
-    135deg,
-    #0d9488 0%,
-    #14b8a6 30%,
-    #22d3ee 70%,
-    #06b6d4 100%
-  );
+  background: var(--card-bg);
   padding: 40px;
   border-radius: var(--radius-xl);
   margin-top: 40px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(6, 182, 212, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.result-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100%;
-  background: radial-gradient(
-    ellipse at 50% 0%,
-    rgba(255, 255, 255, 0.15) 0%,
-    transparent 60%
-  );
-  pointer-events: none;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-lg);
 }
 
 .result-header {
   text-align: center;
   margin-bottom: 32px;
   padding-bottom: 20px;
+  border-bottom: 1px solid var(--surface-border);
   position: relative;
 }
 
@@ -538,13 +477,12 @@ h6 {
   font-size: 1.8rem;
   font-weight: 700;
   margin-bottom: 6px;
-  color: white;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  color: var(--text);
 }
 
 .result-header .date {
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-muted);
 }
 
 .result-items {
@@ -556,15 +494,16 @@ h6 {
 }
 
 .result-person {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
   padding: 20px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid var(--surface-border);
   transition: all var(--transition-normal);
 }
 
 .result-person:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-light);
+  border-color: rgba(6, 182, 212, 0.3);
   transform: translateY(-2px);
 }
 
@@ -579,21 +518,20 @@ h6 {
 .result-person-name {
   font-size: 1.1rem;
   font-weight: 700;
-  color: white;
+  color: var(--text);
 }
 
 .result-person-total {
   font-size: 1.2rem;
   font-weight: 800;
-  color: #fef08a;
-  text-shadow: 0 0 12px rgba(254, 240, 138, 0.6);
+  color: var(--neon-cyan);
   white-space: nowrap;
 }
 
 .result-person-items {
   font-size: 0.85rem;
   list-style: none;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-muted);
 }
 
 .result-person-items li {
@@ -609,13 +547,13 @@ h6 {
 
 .result-person-items li span:last-child {
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text);
 }
 
 .result-summary {
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  border-top: 1px solid var(--surface-border);
   position: relative;
 }
 
@@ -624,7 +562,7 @@ h6 {
   justify-content: space-between;
   padding: 8px 0;
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-muted);
 }
 
 .summary-row.total {
@@ -632,13 +570,12 @@ h6 {
   font-weight: 800;
   padding-top: 16px;
   margin-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
-  color: white;
+  border-top: 1px solid var(--surface-border);
+  color: var(--text);
 }
 
 .summary-row.total span:last-child {
-  color: #22ff88;
-  text-shadow: 0 0 20px rgba(34, 255, 136, 0.5);
+  color: var(--neon-green);
 }
 
 /* Download Button */

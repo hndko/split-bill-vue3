@@ -6,23 +6,43 @@ import html2canvas from "html2canvas";
 const items = ref([]);
 const participants = ref([]);
 const newItem = ref({ name: "", price: "", qty: 1 });
+const displayPrice = ref("");
 const newParticipant = ref("");
 const taxPercent = ref(10);
 const serviceValue = ref(5);
 const serviceType = ref("percent"); // 'percent' or 'fixed'
 const resultRef = ref(null);
 
+// Format number to Indonesian format (with dots as thousand separator)
+const formatInputNumber = (value) => {
+  // Remove all non-digit characters
+  const numericValue = value.replace(/\D/g, "");
+  // Format with dots as thousand separator
+  return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
+// Handle price input
+const handlePriceInput = (e) => {
+  const value = e.target.value;
+  const formatted = formatInputNumber(value);
+  displayPrice.value = formatted;
+  // Store the raw numeric value
+  newItem.value.price = formatted.replace(/\./g, "");
+};
+
 // Add new item
 const addItem = () => {
-  if (newItem.value.name && newItem.value.price > 0) {
+  const rawPrice = newItem.value.price.toString().replace(/\./g, "");
+  if (newItem.value.name && parseFloat(rawPrice) > 0) {
     items.value.push({
       id: Date.now(),
       name: newItem.value.name,
-      price: parseFloat(newItem.value.price),
+      price: parseFloat(rawPrice),
       qty: parseInt(newItem.value.qty) || 1,
       assignedTo: [],
     });
     newItem.value = { name: "", price: "", qty: 1 };
+    displayPrice.value = "";
   }
 };
 
@@ -253,10 +273,11 @@ const handleParticipantEnter = (e) => {
             <div class="form-group">
               <label class="form-label">Harga</label>
               <input
-                type="number"
+                type="text"
                 class="form-input"
-                v-model="newItem.price"
-                placeholder="25000"
+                :value="displayPrice"
+                @input="handlePriceInput"
+                placeholder="Contoh: 25.000"
                 @keyup="handleItemEnter"
               />
             </div>
