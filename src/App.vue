@@ -8,7 +8,8 @@ const participants = ref([]);
 const newItem = ref({ name: "", price: "", qty: 1 });
 const newParticipant = ref("");
 const taxPercent = ref(10);
-const servicePercent = ref(5);
+const serviceValue = ref(5);
+const serviceType = ref("percent"); // 'percent' or 'fixed'
 const resultRef = ref(null);
 
 // Add new item
@@ -83,12 +84,24 @@ const taxAmount = computed(() => {
 
 // Calculate service charge
 const serviceAmount = computed(() => {
-  return subtotal.value * (servicePercent.value / 100);
+  if (serviceType.value === "fixed") {
+    return parseFloat(serviceValue.value) || 0;
+  }
+  return subtotal.value * (serviceValue.value / 100);
 });
 
 // Calculate grand total
 const grandTotal = computed(() => {
   return subtotal.value + taxAmount.value + serviceAmount.value;
+});
+
+// Get participants who have items assigned (for fixed service split)
+const activeParticipants = computed(() => {
+  const active = new Set();
+  items.value.forEach((item) => {
+    item.assignedTo.forEach((p) => active.add(p));
+  });
+  return Array.from(active);
 });
 
 // Calculate each participant's total
@@ -124,17 +137,33 @@ const participantTotals = computed(() => {
     }
   });
 
-  // Calculate tax & service share proportionally
+  // Calculate tax & service share
   const totalItemsAssigned = Object.values(totals).reduce(
     (sum, p) => sum + p.itemsTotal,
     0
   );
 
   if (totalItemsAssigned > 0) {
+    const numActiveParticipants = activeParticipants.value.length;
+
     Object.keys(totals).forEach((p) => {
       const proportion = totals[p].itemsTotal / totalItemsAssigned;
+      const hasItems = totals[p].itemsTotal > 0;
+
+      // Tax is always proportional
       totals[p].taxShare = taxAmount.value * proportion;
-      totals[p].serviceShare = serviceAmount.value * proportion;
+
+      // Service: fixed = split equally, percent = proportional
+      if (
+        serviceType.value === "fixed" &&
+        hasItems &&
+        numActiveParticipants > 0
+      ) {
+        totals[p].serviceShare = serviceAmount.value / numActiveParticipants;
+      } else {
+        totals[p].serviceShare = serviceAmount.value * proportion;
+      }
+
       totals[p].total =
         totals[p].itemsTotal + totals[p].taxShare + totals[p].serviceShare;
     });
@@ -292,14 +321,35 @@ const handleParticipantEnter = (e) => {
               />
             </div>
             <div class="form-group">
-              <label class="form-label">Service (%)</label>
-              <input
-                type="number"
-                class="form-input"
-                v-model="servicePercent"
-                min="0"
-                max="100"
-              />
+              <label class="form-label">Service</label>
+              <div class="input-with-toggle">
+                <input
+                  type="number"
+                  class="form-input"
+                  v-model="serviceValue"
+                  min="0"
+                  :placeholder="serviceType === 'fixed' ? '10000' : '5'"
+                />
+                <div class="toggle-btns">
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: serviceType === 'percent' }"
+                    @click="serviceType = 'percent'"
+                  >
+                    %
+                  </button>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: serviceType === 'fixed' }"
+                    @click="serviceType = 'fixed'"
+                  >
+                    Rp
+                  </button>
+                </div>
+              </div>
+              <small class="form-hint" v-if="serviceType === 'fixed'">
+                Dibagi rata ke semua peserta
+              </small>
             </div>
           </div>
 
@@ -312,7 +362,12 @@ const handleParticipantEnter = (e) => {
             <span>{{ formatCurrency(taxAmount) }}</span>
           </div>
           <div class="summary-row">
-            <span>Service ({{ servicePercent }}%)</span>
+            <span
+              >Service
+              {{
+                serviceType === "fixed" ? "(Fixed)" : `(${serviceValue}%)`
+              }}</span
+            >
             <span>{{ formatCurrency(serviceAmount) }}</span>
           </div>
           <div class="summary-row total">
