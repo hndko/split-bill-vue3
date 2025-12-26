@@ -246,92 +246,59 @@ const handleParticipantEnter = (e) => {
     <!-- Header -->
     <header class="header">
       <h1>💰 Split Bill</h1>
-      <p>Hitung dan bagikan tagihan dengan mudah!</p>
+      <p>Hitung patungan dengan mudah!</p>
     </header>
 
-    <!-- Daftar Menu Card - Full Width -->
-    <div class="card">
-      <h2 class="card-title">
-        <span class="icon">🍽️</span>
-        Daftar Menu
-      </h2>
-
-      <div class="form-row">
-        <div class="form-group" style="flex: 2">
-          <label class="form-label">Nama Item</label>
-          <input
-            type="text"
-            class="form-input"
-            v-model="newItem.name"
-            placeholder="Contoh: Nasi Goreng"
-            @keyup="handleItemEnter"
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Harga</label>
-          <input
-            type="text"
-            class="form-input"
-            :value="displayPrice"
-            @input="handlePriceInput"
-            placeholder="Contoh: 25.000"
-            @keyup="handleItemEnter"
-          />
-        </div>
-        <div class="form-group" style="width: 80px">
-          <label class="form-label">Qty</label>
-          <input
-            type="number"
-            class="form-input"
-            v-model="newItem.qty"
-            min="1"
-            @keyup="handleItemEnter"
-          />
-        </div>
-        <button
-          class="btn btn-primary btn-icon"
-          @click="addItem"
-          title="Tambah Item"
-        >
-          +
-        </button>
+    <!-- Step 1: Setup - Peserta & Pajak/Service -->
+    <section class="section">
+      <div class="section-header">
+        <span class="step-badge">1</span>
+        <h2 class="section-title">Setup</h2>
       </div>
 
-      <!-- Item List -->
-      <div class="item-list mt-3" v-if="items.length > 0">
-        <div class="item-row" v-for="item in items" :key="item.id">
-          <span class="item-name">{{ item.name }}</span>
-          <span class="item-qty">x{{ item.qty }}</span>
-          <span class="item-price">{{
-            formatCurrency(getItemTotal(item))
-          }}</span>
-          <button
-            class="btn btn-danger btn-sm btn-icon"
-            @click="removeItem(item.id)"
-          >
-            ×
-          </button>
-        </div>
-      </div>
-
-      <div class="empty-state" v-else>
-        <div class="icon">📝</div>
-        <p>Belum ada item. Tambahkan menu yang dipesan!</p>
-      </div>
-    </div>
-
-    <div class="grid-2">
-      <!-- Left Column: Tax & Service -->
-      <div>
-        <!-- Tax & Service Card -->
+      <div class="grid-2">
+        <!-- Peserta Card -->
         <div class="card">
-          <h2 class="card-title">
+          <h3 class="card-title">
+            <span class="icon">👥</span>
+            Peserta
+          </h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <input
+                type="text"
+                class="form-input"
+                v-model="newParticipant"
+                placeholder="Masukkan nama peserta..."
+                @keyup="handleParticipantEnter"
+              />
+            </div>
+            <button class="btn btn-primary btn-icon" @click="addParticipant">
+              +
+            </button>
+          </div>
+
+          <div class="participant-tags" v-if="participants.length > 0">
+            <span class="participant-tag" v-for="p in participants" :key="p">
+              {{ p }}
+              <span class="remove" @click="removeParticipant(p)">×</span>
+            </span>
+          </div>
+
+          <div class="empty-state-mini" v-else>
+            <p>Belum ada peserta</p>
+          </div>
+        </div>
+
+        <!-- Pajak & Service Card -->
+        <div class="card">
+          <h3 class="card-title">
             <span class="icon">💵</span>
             Pajak & Service
-          </h2>
+          </h3>
 
           <div class="tax-service-grid">
-            <!-- Pajak Input -->
             <div class="tax-service-item">
               <label class="form-label">Pajak</label>
               <div class="input-with-suffix">
@@ -347,7 +314,6 @@ const handleParticipantEnter = (e) => {
               </div>
             </div>
 
-            <!-- Service Input -->
             <div class="tax-service-item">
               <label class="form-label">Service</label>
               <div class="input-with-toggle">
@@ -356,7 +322,7 @@ const handleParticipantEnter = (e) => {
                   class="form-input"
                   v-model="serviceValue"
                   min="0"
-                  :placeholder="serviceType === 'fixed' ? '10000' : '5'"
+                  :placeholder="serviceType === 'fixed' ? '10000' : '0'"
                 />
                 <div class="toggle-btns">
                   <button
@@ -375,129 +341,121 @@ const handleParticipantEnter = (e) => {
                   </button>
                 </div>
               </div>
-              <small class="form-hint" v-if="serviceType === 'fixed'">
-                Dibagi rata ke semua peserta
-              </small>
             </div>
-          </div>
-
-          <div class="summary-row mt-2">
-            <span>Subtotal</span>
-            <span>{{ formatCurrency(subtotal) }}</span>
-          </div>
-          <div class="summary-row">
-            <span>Pajak ({{ taxPercent }}%)</span>
-            <span>{{ formatCurrency(taxAmount) }}</span>
-          </div>
-          <div class="summary-row">
-            <span
-              >Service
-              {{
-                serviceType === "fixed" ? "(Fixed)" : `(${serviceValue}%)`
-              }}</span
-            >
-            <span>{{ formatCurrency(serviceAmount) }}</span>
-          </div>
-          <div class="summary-row total">
-            <span>Total</span>
-            <span style="color: var(--secondary-light)">{{
-              formatCurrency(grandTotal)
-            }}</span>
           </div>
         </div>
       </div>
+    </section>
 
-      <!-- Right Column: Participants & Assignment -->
-      <div>
-        <!-- Participants Card -->
-        <div class="card">
-          <h2 class="card-title">
-            <span class="icon">👥</span>
-            Peserta
-          </h2>
+    <!-- Step 2: Daftar Menu -->
+    <section class="section">
+      <div class="section-header">
+        <span class="step-badge">2</span>
+        <h2 class="section-title">Daftar Menu</h2>
+      </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Nama Peserta</label>
-              <input
-                type="text"
-                class="form-input"
-                v-model="newParticipant"
-                placeholder="Nama peserta..."
-                @keyup="handleParticipantEnter"
-              />
-            </div>
-            <button class="btn btn-primary btn-icon" @click="addParticipant">
-              +
-            </button>
+      <div class="card">
+        <!-- Add Item Form -->
+        <div class="form-row">
+          <div class="form-group" style="flex: 2">
+            <input
+              type="text"
+              class="form-input"
+              v-model="newItem.name"
+              placeholder="Nama menu..."
+              @keyup="handleItemEnter"
+            />
           </div>
-
-          <div class="participant-tags" v-if="participants.length > 0">
-            <span class="participant-tag" v-for="p in participants" :key="p">
-              {{ p }}
-              <span class="remove" @click="removeParticipant(p)">×</span>
-            </span>
+          <div class="form-group" style="flex: 1">
+            <input
+              type="text"
+              class="form-input"
+              :value="displayPrice"
+              @input="handlePriceInput"
+              placeholder="Harga"
+              @keyup="handleItemEnter"
+            />
           </div>
-
-          <div class="empty-state" v-else>
-            <div class="icon">👤</div>
-            <p>Tambahkan nama peserta yang ikut patungan</p>
+          <div class="form-group" style="width: 70px">
+            <input
+              type="number"
+              class="form-input"
+              v-model="newItem.qty"
+              min="1"
+              placeholder="Qty"
+              @keyup="handleItemEnter"
+            />
           </div>
+          <button
+            class="btn btn-primary btn-icon"
+            @click="addItem"
+            title="Tambah Item"
+          >
+            +
+          </button>
         </div>
 
-        <!-- Assignment Card -->
-        <div class="card" v-if="items.length > 0 && participants.length > 0">
-          <h2 class="card-title">
-            <span class="icon">✓</span>
-            Siapa Pesan Apa?
-          </h2>
-
-          <div class="item-list">
-            <div
-              class="item-row"
-              v-for="item in items"
-              :key="item.id"
-              style="flex-direction: column; align-items: stretch"
-            >
-              <div class="flex justify-between items-center mb-2">
-                <span class="item-name">{{ item.name }}</span>
-                <span class="item-price">{{
-                  formatCurrency(getItemTotal(item))
-                }}</span>
-              </div>
-              <div class="participant-tags">
-                <span
-                  class="participant-tag"
-                  :class="{ inactive: !item.assignedTo.includes(p) }"
-                  v-for="p in participants"
-                  :key="p"
-                  @click="toggleAssignment(item, p)"
-                >
-                  {{ p }}
+        <!-- Item List with Inline Assignment -->
+        <div class="menu-list" v-if="items.length > 0">
+          <div class="menu-item" v-for="item in items" :key="item.id">
+            <div class="menu-item-main">
+              <div class="menu-item-info">
+                <span class="menu-item-name">{{ item.name }}</span>
+                <span class="menu-item-details">
+                  x{{ item.qty }} • {{ formatCurrency(getItemTotal(item)) }}
                 </span>
               </div>
+              <button
+                class="btn-remove"
+                @click="removeItem(item.id)"
+                title="Hapus"
+              >
+                ×
+              </button>
+            </div>
+
+            <!-- Inline Assignment -->
+            <div class="menu-item-assign" v-if="participants.length > 0">
+              <span
+                class="assign-tag"
+                :class="{ active: item.assignedTo.includes(p) }"
+                v-for="p in participants"
+                :key="p"
+                @click="toggleAssignment(item, p)"
+              >
+                {{ p }}
+              </span>
+            </div>
+            <div class="menu-item-hint" v-else>
+              <small>Tambahkan peserta terlebih dahulu</small>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Results Section -->
-    <div v-if="participantTotals.length > 0">
-      <div class="result-card" ref="resultRef">
-        <div class="result-header">
-          <h2>📊 Ringkasan Pembagian</h2>
-          <p class="date">{{ today }}</p>
+        <div class="empty-state-mini" v-else>
+          <p>Belum ada menu. Tambahkan item yang dipesan!</p>
         </div>
+      </div>
+    </section>
 
-        <div class="result-items">
+    <!-- Step 3: Ringkasan -->
+    <section class="section" v-if="participantTotals.length > 0">
+      <div class="section-header">
+        <span class="step-badge">3</span>
+        <h2 class="section-title">Ringkasan Pembagian</h2>
+      </div>
+
+      <div class="result-card" ref="resultRef">
+        <div class="result-date">{{ today }}</div>
+
+        <div class="result-grid">
           <div
             class="result-person"
             v-for="p in participantTotals"
             :key="p.name"
           >
             <div class="result-person-header">
-              <span class="result-person-name">👤 {{ p.name }}</span>
+              <span class="result-person-name">{{ p.name }}</span>
               <span class="result-person-total">{{
                 formatCurrency(p.total)
               }}</span>
@@ -512,11 +470,11 @@ const handleParticipantEnter = (e) => {
                 </span>
                 <span>{{ formatCurrency(item.share) }}</span>
               </li>
-              <li v-if="p.taxShare > 0">
+              <li v-if="p.taxShare > 0" class="tax-service-line">
                 <span>Pajak</span>
                 <span>{{ formatCurrency(p.taxShare) }}</span>
               </li>
-              <li v-if="p.serviceShare > 0">
+              <li v-if="p.serviceShare > 0" class="tax-service-line">
                 <span>Service</span>
                 <span>{{ formatCurrency(p.serviceShare) }}</span>
               </li>
@@ -530,8 +488,17 @@ const handleParticipantEnter = (e) => {
             <span>{{ formatCurrency(subtotal) }}</span>
           </div>
           <div class="summary-row">
-            <span>Pajak + Service</span>
-            <span>{{ formatCurrency(taxAmount + serviceAmount) }}</span>
+            <span>Pajak ({{ taxPercent }}%)</span>
+            <span>{{ formatCurrency(taxAmount) }}</span>
+          </div>
+          <div class="summary-row" v-if="serviceAmount > 0">
+            <span
+              >Service
+              {{
+                serviceType === "fixed" ? "(Fixed)" : `(${serviceValue}%)`
+              }}</span
+            >
+            <span>{{ formatCurrency(serviceAmount) }}</span>
           </div>
           <div class="summary-row total">
             <span>Grand Total</span>
@@ -545,7 +512,7 @@ const handleParticipantEnter = (e) => {
           📥 Download Sebagai Gambar
         </button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
