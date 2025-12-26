@@ -9,7 +9,7 @@ const newItem = ref({ name: "", price: "", qty: 1 });
 const displayPrice = ref("");
 const newParticipant = ref("");
 const taxPercent = ref(10);
-const serviceValue = ref(5);
+const serviceValue = ref(0);
 const serviceType = ref("percent"); // 'percent' or 'fixed'
 const resultRef = ref(null);
 
@@ -330,18 +330,25 @@ const handleParticipantEnter = (e) => {
             Pajak & Service
           </h2>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Pajak (%)</label>
-              <input
-                type="number"
-                class="form-input"
-                v-model="taxPercent"
-                min="0"
-                max="100"
-              />
+          <div class="tax-service-grid">
+            <!-- Pajak Input -->
+            <div class="tax-service-item">
+              <label class="form-label">Pajak</label>
+              <div class="input-with-suffix">
+                <input
+                  type="number"
+                  class="form-input"
+                  v-model="taxPercent"
+                  min="0"
+                  max="100"
+                  placeholder="10"
+                />
+                <span class="input-suffix">%</span>
+              </div>
             </div>
-            <div class="form-group">
+
+            <!-- Service Input -->
+            <div class="tax-service-item">
               <label class="form-label">Service</label>
               <div class="input-with-toggle">
                 <input

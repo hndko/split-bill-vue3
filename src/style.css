@@ -284,6 +284,57 @@ h6 {
   font-style: italic;
 }
 
+/* Tax & Service Grid Layout */
+.tax-service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 600px) {
+  .tax-service-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+.tax-service-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.tax-service-item .form-label {
+  margin-bottom: 10px;
+}
+
+/* Input with Suffix (for %) */
+.input-with-suffix {
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+
+.input-with-suffix .form-input {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.input-suffix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  background: var(--surface-light);
+  border: 2px solid var(--surface-border);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--primary-light);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
