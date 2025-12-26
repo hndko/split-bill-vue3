@@ -249,80 +249,80 @@ const handleParticipantEnter = (e) => {
       <p>Hitung dan bagikan tagihan dengan mudah!</p>
     </header>
 
-    <div class="grid-2">
-      <!-- Left Column: Items & Tax -->
-      <div>
-        <!-- Add Items Card -->
-        <div class="card">
-          <h2 class="card-title">
-            <span class="icon">🍽️</span>
-            Daftar Menu
-          </h2>
+    <!-- Daftar Menu Card - Full Width -->
+    <div class="card">
+      <h2 class="card-title">
+        <span class="icon">🍽️</span>
+        Daftar Menu
+      </h2>
 
-          <div class="form-row">
-            <div class="form-group" style="flex: 2">
-              <label class="form-label">Nama Item</label>
-              <input
-                type="text"
-                class="form-input"
-                v-model="newItem.name"
-                placeholder="Contoh: Nasi Goreng"
-                @keyup="handleItemEnter"
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Harga</label>
-              <input
-                type="text"
-                class="form-input"
-                :value="displayPrice"
-                @input="handlePriceInput"
-                placeholder="Contoh: 25.000"
-                @keyup="handleItemEnter"
-              />
-            </div>
-            <div class="form-group" style="width: 80px">
-              <label class="form-label">Qty</label>
-              <input
-                type="number"
-                class="form-input"
-                v-model="newItem.qty"
-                min="1"
-                @keyup="handleItemEnter"
-              />
-            </div>
-            <button
-              class="btn btn-primary btn-icon"
-              @click="addItem"
-              title="Tambah Item"
-            >
-              +
-            </button>
-          </div>
-
-          <!-- Item List -->
-          <div class="item-list mt-3" v-if="items.length > 0">
-            <div class="item-row" v-for="item in items" :key="item.id">
-              <span class="item-name">{{ item.name }}</span>
-              <span class="item-qty">x{{ item.qty }}</span>
-              <span class="item-price">{{
-                formatCurrency(getItemTotal(item))
-              }}</span>
-              <button
-                class="btn btn-danger btn-sm btn-icon"
-                @click="removeItem(item.id)"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          <div class="empty-state" v-else>
-            <div class="icon">📝</div>
-            <p>Belum ada item. Tambahkan menu yang dipesan!</p>
-          </div>
+      <div class="form-row">
+        <div class="form-group" style="flex: 2">
+          <label class="form-label">Nama Item</label>
+          <input
+            type="text"
+            class="form-input"
+            v-model="newItem.name"
+            placeholder="Contoh: Nasi Goreng"
+            @keyup="handleItemEnter"
+          />
         </div>
+        <div class="form-group">
+          <label class="form-label">Harga</label>
+          <input
+            type="text"
+            class="form-input"
+            :value="displayPrice"
+            @input="handlePriceInput"
+            placeholder="Contoh: 25.000"
+            @keyup="handleItemEnter"
+          />
+        </div>
+        <div class="form-group" style="width: 80px">
+          <label class="form-label">Qty</label>
+          <input
+            type="number"
+            class="form-input"
+            v-model="newItem.qty"
+            min="1"
+            @keyup="handleItemEnter"
+          />
+        </div>
+        <button
+          class="btn btn-primary btn-icon"
+          @click="addItem"
+          title="Tambah Item"
+        >
+          +
+        </button>
+      </div>
 
+      <!-- Item List -->
+      <div class="item-list mt-3" v-if="items.length > 0">
+        <div class="item-row" v-for="item in items" :key="item.id">
+          <span class="item-name">{{ item.name }}</span>
+          <span class="item-qty">x{{ item.qty }}</span>
+          <span class="item-price">{{
+            formatCurrency(getItemTotal(item))
+          }}</span>
+          <button
+            class="btn btn-danger btn-sm btn-icon"
+            @click="removeItem(item.id)"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div class="empty-state" v-else>
+        <div class="icon">📝</div>
+        <p>Belum ada item. Tambahkan menu yang dipesan!</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left Column: Tax & Service -->
+      <div>
         <!-- Tax & Service Card -->
         <div class="card">
           <h2 class="card-title">
