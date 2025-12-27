@@ -12,6 +12,7 @@ const taxPercent = ref(10);
 const serviceValue = ref(0);
 const serviceType = ref("percent"); // 'percent' or 'fixed'
 const resultRef = ref(null);
+const showGuide = ref(false);
 
 // Format number to Indonesian format (with dots as thousand separator)
 const formatInputNumber = (value) => {
@@ -247,7 +248,75 @@ const handleParticipantEnter = (e) => {
     <header class="header">
       <h1>💰 Split Bill</h1>
       <p>Hitung patungan dengan mudah!</p>
+      <button
+        class="guide-btn"
+        @click="showGuide = true"
+        title="Panduan Penggunaan"
+      >
+        ❓ Cara Pakai
+      </button>
     </header>
+
+    <!-- Guide Modal -->
+    <div class="modal-overlay" v-if="showGuide" @click.self="showGuide = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📖 Panduan Penggunaan</h2>
+          <button class="modal-close" @click="showGuide = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="guide-step">
+            <span class="guide-number">1</span>
+            <div class="guide-text">
+              <strong>Tambahkan Peserta</strong>
+              <p>
+                Masukkan nama-nama orang yang ikut patungan di bagian Setup.
+              </p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-number">2</span>
+            <div class="guide-text">
+              <strong>Atur Pajak & Service</strong>
+              <p>
+                Masukkan persentase pajak dan service (bisa dalam % atau nominal
+                Rp).
+              </p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-number">3</span>
+            <div class="guide-text">
+              <strong>Tambahkan Menu</strong>
+              <p>
+                Input nama menu, harga, dan jumlah pesanan. Tekan + atau Enter
+                untuk menambah.
+              </p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-number">4</span>
+            <div class="guide-text">
+              <strong>Pilih Siapa yang Pesan</strong>
+              <p>
+                Klik nama peserta di bawah setiap menu untuk menandai siapa yang
+                memesan.
+              </p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-number">5</span>
+            <div class="guide-text">
+              <strong>Lihat Ringkasan</strong>
+              <p>
+                Hasil pembagian akan muncul otomatis. Klik tombol download untuk
+                menyimpan sebagai gambar.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Step 1: Setup - Peserta & Pajak/Service -->
     <section class="section">
