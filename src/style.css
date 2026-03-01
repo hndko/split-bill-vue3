@@ -366,18 +366,121 @@ body {
   font-size: 0.86rem;
 }
 
-.menu-list {
+.menu-workspace {
   margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
 }
 
-.menu-item {
+.menu-master,
+.menu-detail {
   border: 1px solid var(--border);
-  background: var(--surface-soft);
   border-radius: var(--radius-md);
+  background: var(--surface-soft);
   padding: 12px;
+}
+
+.menu-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.menu-panel-header h4 {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.menu-panel-header small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.menu-master-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.menu-master-item {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.menu-master-item:hover {
+  border-color: var(--primary);
+}
+
+.menu-master-item.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.menu-master-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.menu-master-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.menu-master-total {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.menu-master-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.menu-master-meta small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.menu-detail {
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-detail-action-row {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.participant-search {
+  margin-bottom: 10px;
+}
+
+.menu-detail-list {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .menu-item-main {
@@ -669,6 +772,19 @@ body {
 @media (max-width: 960px) {
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+
+  .menu-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-master-list,
+  .menu-detail-list {
+    max-height: 300px;
+  }
+
+  .menu-detail {
+    min-height: unset;
   }
 
   .header {

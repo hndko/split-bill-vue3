@@ -15,6 +15,8 @@ const autoSyncQty = ref(true);
 const roundingEnabled = ref(false);
 const roundingMode = ref("nearest"); // 'nearest' | 'up' | 'down'
 const roundingUnit = ref(100);
+const selectedItemId = ref(null);
+const participantSearch = ref("");
 const resultRef = ref(null);
 const showGuide = ref(false);
 
@@ -39,13 +41,15 @@ const handlePriceInput = (e) => {
 const addItem = () => {
   const rawPrice = newItem.value.price.toString().replace(/\./g, "");
   if (newItem.value.name && parseFloat(rawPrice) > 0) {
-    items.value.push({
+    const item = {
       id: Date.now(),
       name: newItem.value.name,
       price: parseFloat(rawPrice),
       qty: parseInt(newItem.value.qty) || 1,
       assignments: {},
-    });
+    };
+    items.value.push(item);
+    selectedItemId.value = item.id;
     newItem.value = { name: "", price: "", qty: 1 };
     displayPrice.value = "";
   }
@@ -139,6 +143,39 @@ const decrementParticipantQty = (item, participant) => {
 watch(autoSyncQty, (enabled) => {
   if (!enabled) return;
   items.value.forEach((item) => syncItemQtyWithAssignments(item));
+});
+
+watch(
+  items,
+  (nextItems) => {
+    if (nextItems.length === 0) {
+      selectedItemId.value = null;
+      return;
+    }
+
+    const isSelectedStillExist = nextItems.some(
+      (item) => item.id === selectedItemId.value,
+    );
+
+    if (!isSelectedStillExist) {
+      selectedItemId.value = nextItems[0].id;
+    }
+  },
+  { deep: true },
+);
+
+const selectedItem = computed(() => {
+  if (!selectedItemId.value) return null;
+  return items.value.find((item) => item.id === selectedItemId.value) || null;
+});
+
+const filteredParticipants = computed(() => {
+  const keyword = participantSearch.value.trim().toLowerCase();
+  if (!keyword) return participants.value;
+
+  return participants.value.filter((name) =>
+    name.toLowerCase().includes(keyword),
+  );
 });
 
 // Calculate subtotal per item
@@ -395,8 +432,8 @@ const handleParticipantEnter = (e) => {
             <div class="guide-text">
               <strong>Pilih Siapa yang Pesan</strong>
               <p>
-                Atur jumlah pesanan tiap peserta dengan tombol + / - di bawah
-                setiap menu.
+                Pilih menu di panel kiri, lalu atur jumlah pesanan tiap peserta
+                di panel kanan.
               </p>
             </div>
           </div>
@@ -599,71 +636,113 @@ const handleParticipantEnter = (e) => {
           </button>
         </div>
 
-        <!-- Item List with Inline Assignment -->
-        <div class="menu-list" v-if="items.length > 0">
-          <div class="menu-item" v-for="item in items" :key="item.id">
-            <div class="menu-item-main">
-              <div class="menu-item-info">
-                <span class="menu-item-name">{{ item.name }}</span>
-                <span class="menu-item-details">
-                  x{{ item.qty }} • {{ formatCurrency(getItemTotal(item)) }}
-                </span>
-              </div>
-              <div class="menu-item-actions">
-                <div class="inline-qty-control">
-                  <button
-                    class="qty-btn"
-                    @click="updateItemQty(item, -1)"
-                    :disabled="autoSyncQty || item.qty <= 1"
-                    title="Kurangi qty menu"
-                  >
-                    -
-                  </button>
-                  <span class="qty-value">{{ item.qty }}</span>
-                  <button
-                    class="qty-btn"
-                    @click="updateItemQty(item, 1)"
-                    :disabled="autoSyncQty"
-                    title="Tambah qty menu"
-                  >
-                    +
-                  </button>
+        <div class="menu-workspace" v-if="items.length > 0">
+          <div class="menu-master">
+            <div class="menu-panel-header">
+              <h4>Daftar Menu</h4>
+              <small>Pilih menu untuk atur assignment</small>
+            </div>
+
+            <div class="menu-master-list">
+              <button
+                class="menu-master-item"
+                :class="{ active: selectedItemId === item.id }"
+                v-for="item in items"
+                :key="item.id"
+                @click="selectedItemId = item.id"
+              >
+                <div class="menu-master-top">
+                  <span class="menu-master-name">{{ item.name }}</span>
+                  <span class="menu-master-total">{{
+                    formatCurrency(getItemTotal(item))
+                  }}</span>
                 </div>
+                <div class="menu-master-meta">
+                  <small>Qty {{ item.qty }}</small>
+                  <small
+                    >Alokasi {{ getTotalAssignedQty(item) }}/{{
+                      item.qty
+                    }}</small
+                  >
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="menu-detail" v-if="selectedItem">
+            <div class="menu-panel-header">
+              <h4>{{ selectedItem.name }}</h4>
+              <small>
+                Dialokasikan {{ getTotalAssignedQty(selectedItem) }}/{{
+                  selectedItem.qty
+                }}
+              </small>
+            </div>
+
+            <div class="menu-item-main menu-detail-action-row">
+              <div class="inline-qty-control">
+                <button
+                  class="qty-btn"
+                  @click="updateItemQty(selectedItem, -1)"
+                  :disabled="autoSyncQty || selectedItem.qty <= 1"
+                  title="Kurangi qty menu"
+                >
+                  -
+                </button>
+                <span class="qty-value">{{ selectedItem.qty }}</span>
+                <button
+                  class="qty-btn"
+                  @click="updateItemQty(selectedItem, 1)"
+                  :disabled="autoSyncQty"
+                  title="Tambah qty menu"
+                >
+                  +
+                </button>
               </div>
+
               <button
                 class="btn-remove"
-                @click="removeItem(item.id)"
-                title="Hapus"
+                @click="removeItem(selectedItem.id)"
+                title="Hapus menu"
               >
                 ×
               </button>
             </div>
 
-            <!-- Inline Assignment -->
-            <div class="menu-item-assign" v-if="participants.length > 0">
-              <div class="assign-summary">
-                <small>
-                  Dialokasikan {{ getTotalAssignedQty(item) }}/{{ item.qty }}
-                </small>
-              </div>
+            <div class="participant-search" v-if="participants.length > 0">
+              <input
+                type="text"
+                class="form-input"
+                v-model="participantSearch"
+                placeholder="Cari peserta..."
+              />
+            </div>
 
-              <div class="assign-row" v-for="p in participants" :key="p">
+            <div class="menu-detail-list" v-if="participants.length > 0">
+              <div
+                class="assign-row"
+                v-for="p in filteredParticipants"
+                :key="p"
+              >
                 <span class="assign-name">{{ p }}</span>
                 <div class="assign-qty-control">
                   <button
                     class="qty-btn"
-                    @click="decrementParticipantQty(item, p)"
-                    :disabled="getAssignedQty(item, p) === 0"
+                    @click="decrementParticipantQty(selectedItem, p)"
+                    :disabled="getAssignedQty(selectedItem, p) === 0"
                     title="Kurangi qty peserta"
                   >
                     -
                   </button>
-                  <span class="qty-value">{{ getAssignedQty(item, p) }}</span>
+                  <span class="qty-value">{{
+                    getAssignedQty(selectedItem, p)
+                  }}</span>
                   <button
                     class="qty-btn"
-                    @click="incrementParticipantQty(item, p)"
+                    @click="incrementParticipantQty(selectedItem, p)"
                     :disabled="
-                      !autoSyncQty && getTotalAssignedQty(item) >= item.qty
+                      !autoSyncQty &&
+                      getTotalAssignedQty(selectedItem) >= selectedItem.qty
                     "
                     title="Tambah qty peserta"
                   >
@@ -671,7 +750,15 @@ const handleParticipantEnter = (e) => {
                   </button>
                 </div>
               </div>
+
+              <div
+                class="empty-state-mini"
+                v-if="filteredParticipants.length === 0"
+              >
+                <p>Peserta tidak ditemukan</p>
+              </div>
             </div>
+
             <div class="menu-item-hint" v-else>
               <small>Tambahkan peserta terlebih dahulu</small>
             </div>
