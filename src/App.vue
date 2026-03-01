@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import html2canvas from "html2canvas";
 
 const STORAGE_KEYS = {
@@ -148,6 +148,7 @@ const autoSortMenu = ref(
 );
 const resultRef = ref(null);
 const showGuide = ref(false);
+const showResetConfirm = ref(false);
 
 if (!ROUNDING_MODES.includes(roundingMode.value)) {
   roundingMode.value = "nearest";
@@ -157,14 +158,7 @@ if (!SERVICE_TYPES.includes(serviceType.value)) {
   serviceType.value = "percent";
 }
 
-const resetAllStoredPreferences = () => {
-  if (typeof window !== "undefined") {
-    const isConfirmed = window.confirm(
-      "Reset semua pengaturan tersimpan ke default?",
-    );
-    if (!isConfirmed) return;
-  }
-
+const applyResetAllStoredPreferences = () => {
   shouldSkipStoragePersist = true;
 
   taxPercent.value = DEFAULT_SETTINGS.taxPercent;
@@ -184,6 +178,35 @@ const resetAllStoredPreferences = () => {
     items.value.forEach((item) => syncItemQtyWithAssignments(item));
   }
 };
+
+const openResetConfirmationModal = () => {
+  showResetConfirm.value = true;
+};
+
+const closeResetConfirmationModal = () => {
+  showResetConfirm.value = false;
+};
+
+const confirmResetAllStoredPreferences = () => {
+  applyResetAllStoredPreferences();
+  closeResetConfirmationModal();
+};
+
+const handleWindowKeydown = (event) => {
+  if (event.key === "Escape" && showResetConfirm.value) {
+    closeResetConfirmationModal();
+  }
+};
+
+onMounted(() => {
+  if (typeof window === "undefined") return;
+  window.addEventListener("keydown", handleWindowKeydown);
+});
+
+onBeforeUnmount(() => {
+  if (typeof window === "undefined") return;
+  window.removeEventListener("keydown", handleWindowKeydown);
+});
 
 // Format number to Indonesian format (with dots as thousand separator)
 const formatInputNumber = (value) => {
@@ -746,6 +769,37 @@ const handleParticipantEnter = (e) => {
       </div>
     </div>
 
+    <div
+      class="modal-overlay"
+      v-if="showResetConfirm"
+      @click.self="closeResetConfirmationModal"
+    >
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>⚠️ Konfirmasi Reset</h2>
+          <button class="modal-close" @click="closeResetConfirmationModal">
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-text">
+            Semua pengaturan tersimpan akan dikembalikan ke default. Lanjutkan?
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-muted" @click="closeResetConfirmationModal">
+              Batal
+            </button>
+            <button
+              class="btn btn-danger"
+              @click="confirmResetAllStoredPreferences"
+            >
+              Ya, Reset
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Step 1: Setup - Peserta & Pajak/Service -->
     <section class="section">
       <div class="section-header">
@@ -881,7 +935,7 @@ const handleParticipantEnter = (e) => {
               <div class="settings-row settings-row-end">
                 <button
                   class="reset-pref-btn"
-                  @click="resetAllStoredPreferences"
+                  @click="openResetConfirmationModal"
                   title="Reset semua preferensi tersimpan"
                 >
                   Reset Semua Pengaturan

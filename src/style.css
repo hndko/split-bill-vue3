@@ -338,6 +338,26 @@ body {
   background: var(--primary-strong);
 }
 
+.btn-muted {
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.btn-muted:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  opacity: 0.92;
+}
+
 .btn-icon {
   width: 42px;
   height: 42px;
@@ -784,6 +804,10 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.modal-content.modal-sm {
+  width: min(420px, 100%);
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -808,6 +832,18 @@ body {
 
 .modal-body {
   padding: 16px;
+}
+
+.confirm-text {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .guide-step {
