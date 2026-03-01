@@ -266,6 +266,11 @@ body {
   margin-bottom: 8px;
 }
 
+.settings-row-end {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .settings-row:last-child {
   margin-bottom: 0;
 }
@@ -284,6 +289,23 @@ body {
   width: 15px;
   height: 15px;
   accent-color: var(--primary);
+}
+
+.reset-pref-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.reset-pref-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .rounding-controls {

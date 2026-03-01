@@ -2,24 +2,188 @@
 import { ref, computed, watch } from "vue";
 import html2canvas from "html2canvas";
 
+const STORAGE_KEYS = {
+  autoSortMenu: "split-bill:auto-sort-menu",
+  taxPercent: "split-bill:tax-percent",
+  serviceType: "split-bill:service-type",
+  serviceValue: "split-bill:service-value",
+  autoSyncQty: "split-bill:auto-sync-qty",
+  roundingEnabled: "split-bill:rounding-enabled",
+  roundingMode: "split-bill:rounding-mode",
+  roundingUnit: "split-bill:rounding-unit",
+};
+
+const ROUNDING_MODES = ["nearest", "up", "down"];
+const SERVICE_TYPES = ["percent", "fixed"];
+const DEFAULT_SETTINGS = {
+  taxPercent: 10,
+  serviceType: "percent",
+  serviceValue: 0,
+  autoSyncQty: true,
+  roundingEnabled: false,
+  roundingMode: "nearest",
+  roundingUnit: 100,
+  autoSortMenu: true,
+};
+
+let shouldSkipStoragePersist = false;
+
+const getStoredBoolean = (key, fallbackValue) => {
+  if (typeof window === "undefined") return fallbackValue;
+
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (rawValue === null) return fallbackValue;
+    return rawValue === "true";
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const getStoredString = (key, fallbackValue) => {
+  if (typeof window === "undefined") return fallbackValue;
+
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    return rawValue === null ? fallbackValue : rawValue;
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const getStoredNumber = (key, fallbackValue, minValue = -Infinity) => {
+  if (typeof window === "undefined") return fallbackValue;
+
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (rawValue === null) return fallbackValue;
+
+    const parsed = parseInt(rawValue, 10);
+    if (Number.isNaN(parsed) || parsed < minValue) return fallbackValue;
+
+    return parsed;
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const getStoredFloat = (
+  key,
+  fallbackValue,
+  minValue = -Infinity,
+  maxValue = Infinity,
+) => {
+  if (typeof window === "undefined") return fallbackValue;
+
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (rawValue === null) return fallbackValue;
+
+    const parsed = parseFloat(rawValue);
+    if (Number.isNaN(parsed) || parsed < minValue || parsed > maxValue) {
+      return fallbackValue;
+    }
+
+    return parsed;
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const setStoredValue = (key, value) => {
+  if (typeof window === "undefined") return;
+  if (shouldSkipStoragePersist) return;
+
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // Ignore localStorage write errors.
+  }
+};
+
+const removeStoredValue = (key) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore localStorage remove errors.
+  }
+};
+
 // State
 const items = ref([]);
 const participants = ref([]);
 const newItem = ref({ name: "", price: "", qty: 1 });
 const displayPrice = ref("");
 const newParticipant = ref("");
-const taxPercent = ref(10);
-const serviceValue = ref(0);
-const serviceType = ref("percent"); // 'percent' or 'fixed'
-const autoSyncQty = ref(true);
-const roundingEnabled = ref(false);
-const roundingMode = ref("nearest"); // 'nearest' | 'up' | 'down'
-const roundingUnit = ref(100);
+const taxPercent = ref(
+  getStoredFloat(STORAGE_KEYS.taxPercent, DEFAULT_SETTINGS.taxPercent, 0, 100),
+);
+const serviceValue = ref(
+  getStoredFloat(STORAGE_KEYS.serviceValue, DEFAULT_SETTINGS.serviceValue, 0),
+);
+const serviceType = ref(
+  getStoredString(STORAGE_KEYS.serviceType, DEFAULT_SETTINGS.serviceType),
+); // 'percent' or 'fixed'
+const autoSyncQty = ref(
+  getStoredBoolean(STORAGE_KEYS.autoSyncQty, DEFAULT_SETTINGS.autoSyncQty),
+);
+const roundingEnabled = ref(
+  getStoredBoolean(
+    STORAGE_KEYS.roundingEnabled,
+    DEFAULT_SETTINGS.roundingEnabled,
+  ),
+);
+const roundingMode = ref(
+  getStoredString(STORAGE_KEYS.roundingMode, DEFAULT_SETTINGS.roundingMode),
+); // 'nearest' | 'up' | 'down'
+const roundingUnit = ref(
+  getStoredNumber(STORAGE_KEYS.roundingUnit, DEFAULT_SETTINGS.roundingUnit, 1),
+);
 const selectedItemId = ref(null);
 const participantSearch = ref("");
-const autoSortMenu = ref(true);
+const autoSortMenu = ref(
+  getStoredBoolean(STORAGE_KEYS.autoSortMenu, DEFAULT_SETTINGS.autoSortMenu),
+);
 const resultRef = ref(null);
 const showGuide = ref(false);
+
+if (!ROUNDING_MODES.includes(roundingMode.value)) {
+  roundingMode.value = "nearest";
+}
+
+if (!SERVICE_TYPES.includes(serviceType.value)) {
+  serviceType.value = "percent";
+}
+
+const resetAllStoredPreferences = () => {
+  if (typeof window !== "undefined") {
+    const isConfirmed = window.confirm(
+      "Reset semua pengaturan tersimpan ke default?",
+    );
+    if (!isConfirmed) return;
+  }
+
+  shouldSkipStoragePersist = true;
+
+  taxPercent.value = DEFAULT_SETTINGS.taxPercent;
+  serviceType.value = DEFAULT_SETTINGS.serviceType;
+  serviceValue.value = DEFAULT_SETTINGS.serviceValue;
+  autoSyncQty.value = DEFAULT_SETTINGS.autoSyncQty;
+  roundingEnabled.value = DEFAULT_SETTINGS.roundingEnabled;
+  roundingMode.value = DEFAULT_SETTINGS.roundingMode;
+  roundingUnit.value = DEFAULT_SETTINGS.roundingUnit;
+  autoSortMenu.value = DEFAULT_SETTINGS.autoSortMenu;
+
+  shouldSkipStoragePersist = false;
+
+  Object.values(STORAGE_KEYS).forEach((key) => removeStoredValue(key));
+
+  if (autoSyncQty.value) {
+    items.value.forEach((item) => syncItemQtyWithAssignments(item));
+  }
+};
 
 // Format number to Indonesian format (with dots as thousand separator)
 const formatInputNumber = (value) => {
@@ -142,8 +306,82 @@ const decrementParticipantQty = (item, participant) => {
 };
 
 watch(autoSyncQty, (enabled) => {
+  setStoredValue(STORAGE_KEYS.autoSyncQty, enabled);
+
   if (!enabled) return;
   items.value.forEach((item) => syncItemQtyWithAssignments(item));
+});
+
+watch(taxPercent, (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    taxPercent.value = 10;
+    return;
+  }
+
+  const clamped = Math.min(Math.max(parsed, 0), 100);
+  if (clamped !== value) {
+    taxPercent.value = clamped;
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.taxPercent, clamped);
+});
+
+watch(serviceType, (value) => {
+  if (!SERVICE_TYPES.includes(value)) {
+    serviceType.value = "percent";
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.serviceType, value);
+});
+
+watch(serviceValue, (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    serviceValue.value = 0;
+    return;
+  }
+
+  if (parsed !== value) {
+    serviceValue.value = parsed;
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.serviceValue, parsed);
+});
+
+watch(autoSortMenu, (enabled) => {
+  setStoredValue(STORAGE_KEYS.autoSortMenu, enabled);
+});
+
+watch(roundingEnabled, (enabled) => {
+  setStoredValue(STORAGE_KEYS.roundingEnabled, enabled);
+});
+
+watch(roundingMode, (mode) => {
+  if (!ROUNDING_MODES.includes(mode)) {
+    roundingMode.value = "nearest";
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.roundingMode, mode);
+});
+
+watch(roundingUnit, (value) => {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    roundingUnit.value = 100;
+    return;
+  }
+
+  if (parsed !== value) {
+    roundingUnit.value = parsed;
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.roundingUnit, parsed);
 });
 
 watch(
@@ -638,6 +876,16 @@ const handleParticipantEnter = (e) => {
                     placeholder="100"
                   />
                 </div>
+              </div>
+
+              <div class="settings-row settings-row-end">
+                <button
+                  class="reset-pref-btn"
+                  @click="resetAllStoredPreferences"
+                  title="Reset semua preferensi tersimpan"
+                >
+                  Reset Semua Pengaturan
+                </button>
               </div>
             </div>
           </div>
