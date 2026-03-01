@@ -178,6 +178,20 @@ const filteredParticipants = computed(() => {
   );
 });
 
+const getAllocationStatus = (item) => {
+  const allocatedQty = getTotalAssignedQty(item);
+
+  if (allocatedQty > item.qty) {
+    return { label: "Over", type: "over" };
+  }
+
+  if (allocatedQty === item.qty) {
+    return { label: "Pas", type: "fit" };
+  }
+
+  return { label: "Belum penuh", type: "under" };
+};
+
 // Calculate subtotal per item
 const getItemTotal = (item) => {
   return item.price * item.qty;
@@ -656,6 +670,14 @@ const handleParticipantEnter = (e) => {
                   <span class="menu-master-total">{{
                     formatCurrency(getItemTotal(item))
                   }}</span>
+                </div>
+                <div class="menu-master-status">
+                  <span
+                    class="status-badge"
+                    :class="`status-${getAllocationStatus(item).type}`"
+                  >
+                    {{ getAllocationStatus(item).label }}
+                  </span>
                 </div>
                 <div class="menu-master-meta">
                   <small>Qty {{ item.qty }}</small>

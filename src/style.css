@@ -446,6 +446,34 @@ body {
   white-space: nowrap;
 }
 
+.menu-master-status {
+  margin-bottom: 6px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.status-under {
+  color: #a16207;
+  background: #fef3c7;
+}
+
+.status-fit {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-over {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
 .menu-master-meta {
   display: flex;
   justify-content: space-between;
