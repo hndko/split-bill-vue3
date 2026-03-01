@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import html2canvas from "html2canvas";
 
 // State
@@ -11,6 +11,10 @@ const newParticipant = ref("");
 const taxPercent = ref(10);
 const serviceValue = ref(0);
 const serviceType = ref("percent"); // 'percent' or 'fixed'
+const autoSyncQty = ref(true);
+const roundingEnabled = ref(false);
+const roundingMode = ref("nearest"); // 'nearest' | 'up' | 'down'
+const roundingUnit = ref(100);
 const resultRef = ref(null);
 const showGuide = ref(false);
 
@@ -40,7 +44,7 @@ const addItem = () => {
       name: newItem.value.name,
       price: parseFloat(rawPrice),
       qty: parseInt(newItem.value.qty) || 1,
-      assignedTo: [],
+      assignments: {},
     });
     newItem.value = { name: "", price: "", qty: 1 };
     displayPrice.value = "";
@@ -68,29 +72,78 @@ const removeParticipant = (name) => {
   participants.value = participants.value.filter((p) => p !== name);
   // Remove from all item assignments
   items.value.forEach((item) => {
-    item.assignedTo = item.assignedTo.filter((p) => p !== name);
+    if (item.assignments && item.assignments[name]) {
+      delete item.assignments[name];
+      syncItemQtyWithAssignments(item);
+    }
   });
 };
 
-// Toggle item assignment
-const toggleAssignment = (item, participant) => {
-  const index = item.assignedTo.indexOf(participant);
-  if (index === -1) {
-    item.assignedTo.push(participant);
-  } else {
-    item.assignedTo.splice(index, 1);
-  }
+// Assignment helpers
+const getAssignedQty = (item, participant) => {
+  return item.assignments?.[participant] || 0;
 };
+
+const getTotalAssignedQty = (item) => {
+  return Object.values(item.assignments || {}).reduce(
+    (sum, qty) => sum + (parseInt(qty) || 0),
+    0,
+  );
+};
+
+const syncItemQtyWithAssignments = (item) => {
+  if (!autoSyncQty.value) return;
+  item.qty = Math.max(getTotalAssignedQty(item), 1);
+};
+
+const updateItemQty = (item, delta) => {
+  if (autoSyncQty.value) return;
+
+  const nextQty = item.qty + delta;
+  if (nextQty < 1) return;
+
+  const assignedQty = getTotalAssignedQty(item);
+  if (nextQty < assignedQty) {
+    alert(
+      "Qty menu tidak boleh lebih kecil dari jumlah yang sudah dialokasikan.",
+    );
+    return;
+  }
+
+  item.qty = nextQty;
+};
+
+const incrementParticipantQty = (item, participant) => {
+  const assignedQty = getTotalAssignedQty(item);
+  if (!autoSyncQty.value && assignedQty >= item.qty) return;
+
+  const currentQty = getAssignedQty(item, participant);
+  item.assignments[participant] = currentQty + 1;
+  syncItemQtyWithAssignments(item);
+};
+
+const decrementParticipantQty = (item, participant) => {
+  const currentQty = getAssignedQty(item, participant);
+  if (currentQty <= 0) return;
+
+  if (currentQty === 1) {
+    delete item.assignments[participant];
+    syncItemQtyWithAssignments(item);
+    return;
+  }
+
+  item.assignments[participant] = currentQty - 1;
+  syncItemQtyWithAssignments(item);
+};
+
+watch(autoSyncQty, (enabled) => {
+  if (!enabled) return;
+  items.value.forEach((item) => syncItemQtyWithAssignments(item));
+});
 
 // Calculate subtotal per item
 const getItemTotal = (item) => {
   return item.price * item.qty;
-};
-
-// Calculate per person share for an item
-const getItemSharePerPerson = (item) => {
-  if (item.assignedTo.length === 0) return 0;
-  return getItemTotal(item) / item.assignedTo.length;
 };
 
 // Calculate subtotal (before tax & service)
@@ -112,15 +165,44 @@ const serviceAmount = computed(() => {
 });
 
 // Calculate grand total
-const grandTotal = computed(() => {
+const grandTotalRaw = computed(() => {
   return subtotal.value + taxAmount.value + serviceAmount.value;
+});
+
+const roundedGrandTotal = computed(() => {
+  if (!roundingEnabled.value) return grandTotalRaw.value;
+
+  const unit = parseInt(roundingUnit.value) || 0;
+  if (unit <= 0) return grandTotalRaw.value;
+
+  if (roundingMode.value === "up") {
+    return Math.ceil(grandTotalRaw.value / unit) * unit;
+  }
+
+  if (roundingMode.value === "down") {
+    return Math.floor(grandTotalRaw.value / unit) * unit;
+  }
+
+  return Math.round(grandTotalRaw.value / unit) * unit;
+});
+
+const roundingAdjustment = computed(() => {
+  return roundedGrandTotal.value - grandTotalRaw.value;
+});
+
+const grandTotal = computed(() => {
+  return roundedGrandTotal.value;
 });
 
 // Get participants who have items assigned (for fixed service split)
 const activeParticipants = computed(() => {
   const active = new Set();
   items.value.forEach((item) => {
-    item.assignedTo.forEach((p) => active.add(p));
+    Object.entries(item.assignments || {}).forEach(([name, qty]) => {
+      if ((parseInt(qty) || 0) > 0) {
+        active.add(name);
+      }
+    });
   });
   return Array.from(active);
 });
@@ -136,32 +218,31 @@ const participantTotals = computed(() => {
       itemsTotal: 0,
       taxShare: 0,
       serviceShare: 0,
+      roundingShare: 0,
       total: 0,
     };
   });
 
   // Calculate items per person
   items.value.forEach((item) => {
-    if (item.assignedTo.length > 0) {
-      const sharePerPerson = getItemSharePerPerson(item);
-      item.assignedTo.forEach((p) => {
-        if (totals[p]) {
-          totals[p].items.push({
-            name: item.name,
-            qty: item.qty,
-            share: sharePerPerson,
-            sharedWith: item.assignedTo.length,
-          });
-          totals[p].itemsTotal += sharePerPerson;
-        }
+    Object.entries(item.assignments || {}).forEach(([name, qty]) => {
+      const assignedQty = parseInt(qty) || 0;
+      if (!totals[name] || assignedQty <= 0) return;
+
+      const share = item.price * assignedQty;
+      totals[name].items.push({
+        name: item.name,
+        qty: assignedQty,
+        share,
       });
-    }
+      totals[name].itemsTotal += share;
+    });
   });
 
   // Calculate tax & service share
   const totalItemsAssigned = Object.values(totals).reduce(
     (sum, p) => sum + p.itemsTotal,
-    0
+    0,
   );
 
   if (totalItemsAssigned > 0) {
@@ -190,7 +271,22 @@ const participantTotals = computed(() => {
     });
   }
 
-  return Object.values(totals).filter((p) => p.total > 0);
+  const activeTotals = Object.values(totals).filter((p) => p.total > 0);
+
+  if (activeTotals.length > 0 && roundingAdjustment.value !== 0) {
+    let highestPayer = activeTotals[0];
+
+    activeTotals.forEach((entry) => {
+      if (entry.total > highestPayer.total) {
+        highestPayer = entry;
+      }
+    });
+
+    highestPayer.roundingShare += roundingAdjustment.value;
+    highestPayer.total += roundingAdjustment.value;
+  }
+
+  return activeTotals;
 });
 
 // Format currency
@@ -280,7 +376,7 @@ const handleParticipantEnter = (e) => {
               <strong>Atur Pajak & Service</strong>
               <p>
                 Masukkan persentase pajak dan service (bisa dalam % atau nominal
-                Rp).
+                Rp), atur auto-sync qty, dan opsi pembulatan total.
               </p>
             </div>
           </div>
@@ -299,8 +395,8 @@ const handleParticipantEnter = (e) => {
             <div class="guide-text">
               <strong>Pilih Siapa yang Pesan</strong>
               <p>
-                Klik nama peserta di bawah setiap menu untuk menandai siapa yang
-                memesan.
+                Atur jumlah pesanan tiap peserta dengan tombol + / - di bawah
+                setiap menu.
               </p>
             </div>
           </div>
@@ -411,6 +507,45 @@ const handleParticipantEnter = (e) => {
                 </div>
               </div>
             </div>
+
+            <div class="tax-service-item span-2">
+              <div class="settings-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="autoSyncQty" />
+                  <span>Auto-sync Qty Menu ke Assignment Peserta</span>
+                </label>
+              </div>
+
+              <div class="settings-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="roundingEnabled" />
+                  <span>Aktifkan Rounding Amount</span>
+                </label>
+              </div>
+
+              <div class="rounding-controls" v-if="roundingEnabled">
+                <div class="form-group">
+                  <label class="form-label">Mode Rounding</label>
+                  <select class="form-input" v-model="roundingMode">
+                    <option value="nearest">Terdekat</option>
+                    <option value="up">Ke Atas</option>
+                    <option value="down">Ke Bawah</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Satuan (Rp)</label>
+                  <input
+                    type="number"
+                    class="form-input"
+                    v-model="roundingUnit"
+                    min="1"
+                    step="100"
+                    placeholder="100"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -474,6 +609,27 @@ const handleParticipantEnter = (e) => {
                   x{{ item.qty }} • {{ formatCurrency(getItemTotal(item)) }}
                 </span>
               </div>
+              <div class="menu-item-actions">
+                <div class="inline-qty-control">
+                  <button
+                    class="qty-btn"
+                    @click="updateItemQty(item, -1)"
+                    :disabled="autoSyncQty || item.qty <= 1"
+                    title="Kurangi qty menu"
+                  >
+                    -
+                  </button>
+                  <span class="qty-value">{{ item.qty }}</span>
+                  <button
+                    class="qty-btn"
+                    @click="updateItemQty(item, 1)"
+                    :disabled="autoSyncQty"
+                    title="Tambah qty menu"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
               <button
                 class="btn-remove"
                 @click="removeItem(item.id)"
@@ -485,15 +641,36 @@ const handleParticipantEnter = (e) => {
 
             <!-- Inline Assignment -->
             <div class="menu-item-assign" v-if="participants.length > 0">
-              <span
-                class="assign-tag"
-                :class="{ active: item.assignedTo.includes(p) }"
-                v-for="p in participants"
-                :key="p"
-                @click="toggleAssignment(item, p)"
-              >
-                {{ p }}
-              </span>
+              <div class="assign-summary">
+                <small>
+                  Dialokasikan {{ getTotalAssignedQty(item) }}/{{ item.qty }}
+                </small>
+              </div>
+
+              <div class="assign-row" v-for="p in participants" :key="p">
+                <span class="assign-name">{{ p }}</span>
+                <div class="assign-qty-control">
+                  <button
+                    class="qty-btn"
+                    @click="decrementParticipantQty(item, p)"
+                    :disabled="getAssignedQty(item, p) === 0"
+                    title="Kurangi qty peserta"
+                  >
+                    -
+                  </button>
+                  <span class="qty-value">{{ getAssignedQty(item, p) }}</span>
+                  <button
+                    class="qty-btn"
+                    @click="incrementParticipantQty(item, p)"
+                    :disabled="
+                      !autoSyncQty && getTotalAssignedQty(item) >= item.qty
+                    "
+                    title="Tambah qty peserta"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="menu-item-hint" v-else>
               <small>Tambahkan peserta terlebih dahulu</small>
@@ -532,10 +709,7 @@ const handleParticipantEnter = (e) => {
             <ul class="result-person-items">
               <li v-for="(item, i) in p.items" :key="i">
                 <span>
-                  {{ item.name }}
-                  <small v-if="item.sharedWith > 1"
-                    >(÷{{ item.sharedWith }})</small
-                  >
+                  {{ item.name }} <small>x{{ item.qty }}</small>
                 </span>
                 <span>{{ formatCurrency(item.share) }}</span>
               </li>
@@ -546,6 +720,10 @@ const handleParticipantEnter = (e) => {
               <li v-if="p.serviceShare > 0" class="tax-service-line">
                 <span>Service</span>
                 <span>{{ formatCurrency(p.serviceShare) }}</span>
+              </li>
+              <li v-if="p.roundingShare !== 0" class="tax-service-line">
+                <span>Pembulatan</span>
+                <span>{{ formatCurrency(p.roundingShare) }}</span>
               </li>
             </ul>
           </div>
@@ -568,6 +746,10 @@ const handleParticipantEnter = (e) => {
               }}</span
             >
             <span>{{ formatCurrency(serviceAmount) }}</span>
+          </div>
+          <div class="summary-row" v-if="roundingAdjustment !== 0">
+            <span>Pembulatan</span>
+            <span>{{ formatCurrency(roundingAdjustment) }}</span>
           </div>
           <div class="summary-row total">
             <span>Grand Total</span>

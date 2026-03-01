@@ -8,9 +8,11 @@ Aplikasi web untuk menghitung dan membagi tagihan/bill secara adil antar peserta
 
 ## ✨ Fitur
 
-- 📝 **Tambah Item Menu** - Input nama, harga (format Indonesia: 25.000), dan jumlah
+- 📝 **Tambah Item Menu + Ubah Qty Cepat** - Input nama, harga (format Indonesia: 25.000), lalu ubah qty dengan tombol +/- setelah item ditambahkan
 - 👥 **Kelola Peserta** - Tambah/hapus peserta yang ikut patungan
-- ✅ **Assign Menu ke Peserta** - Pilih siapa yang memesan menu apa
+- ✅ **Assign Qty Menu ke Peserta** - Atur jumlah menu per peserta (contoh: Nasi Goreng x2 untuk orang yang sama)
+- 🔄 **Mode Auto-sync Qty** - Qty menu otomatis mengikuti total assignment peserta
+- 🎯 **Rounding Amount** - Pembulatan total bill (terdekat/ke atas/ke bawah) dengan satuan Rp yang bisa diatur
 - 💵 **Hitung Pajak & Service** - Support persentase atau nominal fixed
 - 📊 **Ringkasan Pembagian** - Lihat detail tagihan per orang
 - 📥 **Download Gambar** - Simpan ringkasan sebagai gambar PNG
