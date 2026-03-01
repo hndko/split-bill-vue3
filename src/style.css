@@ -266,6 +266,12 @@ body {
   margin-bottom: 8px;
 }
 
+.settings-row-wrap {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-row-end {
   justify-content: flex-end;
   margin-top: 6px;
@@ -356,6 +362,13 @@ body {
 
 .btn-danger:hover {
   opacity: 0.92;
+}
+
+.section-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 4px;
 }
 
 .btn-icon {
@@ -561,6 +574,24 @@ body {
 .menu-detail-action-row {
   justify-content: space-between;
   margin-bottom: 10px;
+}
+
+.detail-quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.item-scope-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.item-scope-settings .form-group {
+  margin: 0;
 }
 
 .participant-search {
@@ -771,7 +802,40 @@ body {
 
 .download-section {
   margin-top: 14px;
-  text-align: right;
+  text-align: left;
+}
+
+.download-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-link {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.history-card {
+  margin-top: 12px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
 }
 
 .download-btn {
@@ -914,7 +978,8 @@ body {
   }
 
   .tax-service-grid,
-  .rounding-controls {
+  .rounding-controls,
+  .item-scope-settings {
     grid-template-columns: 1fr;
   }
 

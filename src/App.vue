@@ -1,27 +1,39 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 const STORAGE_KEYS = {
   autoSortMenu: "split-bill:auto-sort-menu",
   taxPercent: "split-bill:tax-percent",
   serviceType: "split-bill:service-type",
   serviceValue: "split-bill:service-value",
+  taxServiceScope: "split-bill:tax-service-scope",
+  roundingDistribution: "split-bill:rounding-distribution",
+  roundingTargetName: "split-bill:rounding-target-name",
   autoSyncQty: "split-bill:auto-sync-qty",
   roundingEnabled: "split-bill:rounding-enabled",
   roundingMode: "split-bill:rounding-mode",
   roundingUnit: "split-bill:rounding-unit",
+  draftState: "split-bill:draft-state",
+  historyList: "split-bill:history-list",
 };
 
 const ROUNDING_MODES = ["nearest", "up", "down"];
 const SERVICE_TYPES = ["percent", "fixed"];
+const TAX_SERVICE_SCOPES = ["global", "per-item"];
+const ROUNDING_DISTRIBUTIONS = ["highest", "equal", "selected"];
+const HISTORY_LIMIT = 20;
 const DEFAULT_SETTINGS = {
   taxPercent: 10,
   serviceType: "percent",
   serviceValue: 0,
+  taxServiceScope: "global",
   autoSyncQty: true,
   roundingEnabled: false,
   roundingMode: "nearest",
+  roundingDistribution: "highest",
+  roundingTargetName: "",
   roundingUnit: 100,
   autoSortMenu: true,
 };
@@ -90,12 +102,39 @@ const getStoredFloat = (
   }
 };
 
+const getStoredJson = (key, fallbackValue) => {
+  if (typeof window === "undefined") return fallbackValue;
+
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (!rawValue) return fallbackValue;
+    return JSON.parse(rawValue);
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const deepClone = (value) => {
+  return JSON.parse(JSON.stringify(value));
+};
+
 const setStoredValue = (key, value) => {
   if (typeof window === "undefined") return;
   if (shouldSkipStoragePersist) return;
 
   try {
     window.localStorage.setItem(key, String(value));
+  } catch {
+    // Ignore localStorage write errors.
+  }
+};
+
+const setStoredJson = (key, value) => {
+  if (typeof window === "undefined") return;
+  if (shouldSkipStoragePersist) return;
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // Ignore localStorage write errors.
   }
@@ -126,6 +165,12 @@ const serviceValue = ref(
 const serviceType = ref(
   getStoredString(STORAGE_KEYS.serviceType, DEFAULT_SETTINGS.serviceType),
 ); // 'percent' or 'fixed'
+const taxServiceScope = ref(
+  getStoredString(
+    STORAGE_KEYS.taxServiceScope,
+    DEFAULT_SETTINGS.taxServiceScope,
+  ),
+);
 const autoSyncQty = ref(
   getStoredBoolean(STORAGE_KEYS.autoSyncQty, DEFAULT_SETTINGS.autoSyncQty),
 );
@@ -138,6 +183,18 @@ const roundingEnabled = ref(
 const roundingMode = ref(
   getStoredString(STORAGE_KEYS.roundingMode, DEFAULT_SETTINGS.roundingMode),
 ); // 'nearest' | 'up' | 'down'
+const roundingDistribution = ref(
+  getStoredString(
+    STORAGE_KEYS.roundingDistribution,
+    DEFAULT_SETTINGS.roundingDistribution,
+  ),
+);
+const roundingTargetName = ref(
+  getStoredString(
+    STORAGE_KEYS.roundingTargetName,
+    DEFAULT_SETTINGS.roundingTargetName,
+  ),
+);
 const roundingUnit = ref(
   getStoredNumber(STORAGE_KEYS.roundingUnit, DEFAULT_SETTINGS.roundingUnit, 1),
 );
@@ -149,6 +206,10 @@ const autoSortMenu = ref(
 const resultRef = ref(null);
 const showGuide = ref(false);
 const showResetConfirm = ref(false);
+const historyEntries = ref(getStoredJson(STORAGE_KEYS.historyList, []));
+const undoStack = ref([]);
+const redoStack = ref([]);
+const shareLink = ref("");
 
 if (!ROUNDING_MODES.includes(roundingMode.value)) {
   roundingMode.value = "nearest";
@@ -158,15 +219,230 @@ if (!SERVICE_TYPES.includes(serviceType.value)) {
   serviceType.value = "percent";
 }
 
+if (!TAX_SERVICE_SCOPES.includes(taxServiceScope.value)) {
+  taxServiceScope.value = DEFAULT_SETTINGS.taxServiceScope;
+}
+
+if (!ROUNDING_DISTRIBUTIONS.includes(roundingDistribution.value)) {
+  roundingDistribution.value = DEFAULT_SETTINGS.roundingDistribution;
+}
+
+const normalizeItemSettings = (item) => {
+  return {
+    ...item,
+    taxPercent:
+      typeof item.taxPercent === "number" ? item.taxPercent : taxPercent.value,
+    serviceType: SERVICE_TYPES.includes(item.serviceType)
+      ? item.serviceType
+      : serviceType.value,
+    serviceValue:
+      typeof item.serviceValue === "number"
+        ? item.serviceValue
+        : Number(serviceValue.value) || 0,
+    assignments: { ...(item.assignments || {}) },
+  };
+};
+
+const createStateSnapshot = () => {
+  return {
+    items: items.value.map((item) => normalizeItemSettings(item)),
+    participants: [...participants.value],
+    selectedItemId: selectedItemId.value,
+    settings: {
+      taxPercent: Number(taxPercent.value) || DEFAULT_SETTINGS.taxPercent,
+      serviceType: serviceType.value,
+      serviceValue: Number(serviceValue.value) || 0,
+      taxServiceScope: taxServiceScope.value,
+      autoSyncQty: autoSyncQty.value,
+      roundingEnabled: roundingEnabled.value,
+      roundingMode: roundingMode.value,
+      roundingDistribution: roundingDistribution.value,
+      roundingTargetName: roundingTargetName.value,
+      roundingUnit: Number(roundingUnit.value) || DEFAULT_SETTINGS.roundingUnit,
+      autoSortMenu: autoSortMenu.value,
+    },
+  };
+};
+
+const applyStateSnapshot = (snapshot) => {
+  if (!snapshot) return;
+
+  shouldSkipStoragePersist = true;
+
+  items.value = (snapshot.items || []).map((item) =>
+    normalizeItemSettings(deepClone(item)),
+  );
+  participants.value = [...(snapshot.participants || [])];
+  selectedItemId.value = snapshot.selectedItemId || null;
+
+  const settings = snapshot.settings || {};
+  taxPercent.value = Number(settings.taxPercent ?? DEFAULT_SETTINGS.taxPercent);
+  serviceType.value = SERVICE_TYPES.includes(settings.serviceType)
+    ? settings.serviceType
+    : DEFAULT_SETTINGS.serviceType;
+  serviceValue.value = Number(
+    settings.serviceValue ?? DEFAULT_SETTINGS.serviceValue,
+  );
+  taxServiceScope.value = TAX_SERVICE_SCOPES.includes(settings.taxServiceScope)
+    ? settings.taxServiceScope
+    : DEFAULT_SETTINGS.taxServiceScope;
+  autoSyncQty.value = Boolean(
+    settings.autoSyncQty ?? DEFAULT_SETTINGS.autoSyncQty,
+  );
+  roundingEnabled.value = Boolean(
+    settings.roundingEnabled ?? DEFAULT_SETTINGS.roundingEnabled,
+  );
+  roundingMode.value = ROUNDING_MODES.includes(settings.roundingMode)
+    ? settings.roundingMode
+    : DEFAULT_SETTINGS.roundingMode;
+  roundingDistribution.value = ROUNDING_DISTRIBUTIONS.includes(
+    settings.roundingDistribution,
+  )
+    ? settings.roundingDistribution
+    : DEFAULT_SETTINGS.roundingDistribution;
+  roundingTargetName.value = settings.roundingTargetName || "";
+  roundingUnit.value = Math.max(
+    Number(settings.roundingUnit ?? DEFAULT_SETTINGS.roundingUnit) ||
+      DEFAULT_SETTINGS.roundingUnit,
+    1,
+  );
+  autoSortMenu.value = Boolean(
+    settings.autoSortMenu ?? DEFAULT_SETTINGS.autoSortMenu,
+  );
+
+  shouldSkipStoragePersist = false;
+
+  if (autoSyncQty.value) {
+    items.value.forEach((item) => {
+      item.qty = Math.max(
+        Object.values(item.assignments || {}).reduce(
+          (sum, qty) => sum + (parseInt(qty) || 0),
+          0,
+        ),
+        1,
+      );
+    });
+  }
+};
+
+const pushUndoSnapshot = () => {
+  undoStack.value.push(createStateSnapshot());
+  if (undoStack.value.length > 50) {
+    undoStack.value.shift();
+  }
+  redoStack.value = [];
+};
+
+const undoLastAction = () => {
+  if (undoStack.value.length === 0) return;
+  const previous = undoStack.value.pop();
+  redoStack.value.push(createStateSnapshot());
+  applyStateSnapshot(previous);
+};
+
+const redoLastAction = () => {
+  if (redoStack.value.length === 0) return;
+  const next = redoStack.value.pop();
+  undoStack.value.push(createStateSnapshot());
+  applyStateSnapshot(next);
+};
+
+const persistDraftState = () => {
+  setStoredJson(STORAGE_KEYS.draftState, createStateSnapshot());
+};
+
+const saveCurrentStateToHistory = () => {
+  const entry = {
+    id: Date.now(),
+    label: new Date().toLocaleString("id-ID"),
+    snapshot: createStateSnapshot(),
+  };
+
+  historyEntries.value = [entry, ...historyEntries.value].slice(
+    0,
+    HISTORY_LIMIT,
+  );
+  setStoredJson(STORAGE_KEYS.historyList, historyEntries.value);
+};
+
+const loadHistoryEntry = (entry) => {
+  if (!entry?.snapshot) return;
+  pushUndoSnapshot();
+  applyStateSnapshot(entry.snapshot);
+};
+
+const exportShareLink = async () => {
+  if (typeof window === "undefined") return;
+
+  const encoded = btoa(
+    unescape(encodeURIComponent(JSON.stringify(createStateSnapshot()))),
+  );
+  const url = `${window.location.origin}${window.location.pathname}?state=${encodeURIComponent(encoded)}`;
+  shareLink.value = url;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("Link state berhasil disalin.");
+  } catch {
+    alert("Gagal menyalin link. Link sudah ditampilkan di aplikasi.");
+  }
+};
+
+const hydrateStateFromUrlOrDraft = () => {
+  if (typeof window === "undefined") return;
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const encodedState = params.get("state");
+
+    if (encodedState) {
+      const decodedJson = decodeURIComponent(escape(atob(encodedState)));
+      const snapshot = JSON.parse(decodedJson);
+      applyStateSnapshot(snapshot);
+      persistDraftState();
+      params.delete("state");
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+      return;
+    }
+  } catch {
+    // Ignore invalid shared state.
+  }
+
+  const draft = getStoredJson(STORAGE_KEYS.draftState, null);
+  if (draft) {
+    applyStateSnapshot(draft);
+  }
+};
+
+const clearSelectedItemAssignments = () => {
+  if (!selectedItemId.value) return;
+  const target = items.value.find((item) => item.id === selectedItemId.value);
+  if (!target) return;
+
+  pushUndoSnapshot();
+  target.assignments = {};
+  if (autoSyncQty.value) {
+    target.qty = 1;
+  }
+};
+
+const zeroAllParticipantsForSelectedItem = () => {
+  clearSelectedItemAssignments();
+};
+
 const applyResetAllStoredPreferences = () => {
   shouldSkipStoragePersist = true;
 
   taxPercent.value = DEFAULT_SETTINGS.taxPercent;
   serviceType.value = DEFAULT_SETTINGS.serviceType;
   serviceValue.value = DEFAULT_SETTINGS.serviceValue;
+  taxServiceScope.value = DEFAULT_SETTINGS.taxServiceScope;
   autoSyncQty.value = DEFAULT_SETTINGS.autoSyncQty;
   roundingEnabled.value = DEFAULT_SETTINGS.roundingEnabled;
   roundingMode.value = DEFAULT_SETTINGS.roundingMode;
+  roundingDistribution.value = DEFAULT_SETTINGS.roundingDistribution;
+  roundingTargetName.value = DEFAULT_SETTINGS.roundingTargetName;
   roundingUnit.value = DEFAULT_SETTINGS.roundingUnit;
   autoSortMenu.value = DEFAULT_SETTINGS.autoSortMenu;
 
@@ -201,6 +477,7 @@ const handleWindowKeydown = (event) => {
 onMounted(() => {
   if (typeof window === "undefined") return;
   window.addEventListener("keydown", handleWindowKeydown);
+  hydrateStateFromUrlOrDraft();
 });
 
 onBeforeUnmount(() => {
@@ -229,12 +506,16 @@ const handlePriceInput = (e) => {
 const addItem = () => {
   const rawPrice = newItem.value.price.toString().replace(/\./g, "");
   if (newItem.value.name && parseFloat(rawPrice) > 0) {
+    pushUndoSnapshot();
     const item = {
       id: Date.now(),
       name: newItem.value.name,
       price: parseFloat(rawPrice),
       qty: parseInt(newItem.value.qty) || 1,
       assignments: {},
+      taxPercent: Number(taxPercent.value) || DEFAULT_SETTINGS.taxPercent,
+      serviceType: serviceType.value,
+      serviceValue: Number(serviceValue.value) || 0,
     };
     items.value.push(item);
     selectedItemId.value = item.id;
@@ -245,6 +526,7 @@ const addItem = () => {
 
 // Remove item
 const removeItem = (id) => {
+  pushUndoSnapshot();
   items.value = items.value.filter((item) => item.id !== id);
 };
 
@@ -254,6 +536,7 @@ const addParticipant = () => {
     newParticipant.value.trim() &&
     !participants.value.includes(newParticipant.value.trim())
   ) {
+    pushUndoSnapshot();
     participants.value.push(newParticipant.value.trim());
     newParticipant.value = "";
   }
@@ -261,6 +544,7 @@ const addParticipant = () => {
 
 // Remove participant
 const removeParticipant = (name) => {
+  pushUndoSnapshot();
   participants.value = participants.value.filter((p) => p !== name);
   // Remove from all item assignments
   items.value.forEach((item) => {
@@ -302,6 +586,7 @@ const updateItemQty = (item, delta) => {
     return;
   }
 
+  pushUndoSnapshot();
   item.qty = nextQty;
 };
 
@@ -309,6 +594,7 @@ const incrementParticipantQty = (item, participant) => {
   const assignedQty = getTotalAssignedQty(item);
   if (!autoSyncQty.value && assignedQty >= item.qty) return;
 
+  pushUndoSnapshot();
   const currentQty = getAssignedQty(item, participant);
   item.assignments[participant] = currentQty + 1;
   syncItemQtyWithAssignments(item);
@@ -318,6 +604,7 @@ const decrementParticipantQty = (item, participant) => {
   const currentQty = getAssignedQty(item, participant);
   if (currentQty <= 0) return;
 
+  pushUndoSnapshot();
   if (currentQty === 1) {
     delete item.assignments[participant];
     syncItemQtyWithAssignments(item);
@@ -407,6 +694,51 @@ watch(roundingUnit, (value) => {
   setStoredValue(STORAGE_KEYS.roundingUnit, parsed);
 });
 
+watch(taxServiceScope, (scope) => {
+  if (!TAX_SERVICE_SCOPES.includes(scope)) {
+    taxServiceScope.value = DEFAULT_SETTINGS.taxServiceScope;
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.taxServiceScope, scope);
+});
+
+watch(roundingDistribution, (distribution) => {
+  if (!ROUNDING_DISTRIBUTIONS.includes(distribution)) {
+    roundingDistribution.value = DEFAULT_SETTINGS.roundingDistribution;
+    return;
+  }
+
+  setStoredValue(STORAGE_KEYS.roundingDistribution, distribution);
+});
+
+watch(roundingTargetName, (name) => {
+  setStoredValue(STORAGE_KEYS.roundingTargetName, name || "");
+});
+
+watch(
+  [
+    items,
+    participants,
+    selectedItemId,
+    taxPercent,
+    serviceType,
+    serviceValue,
+    taxServiceScope,
+    autoSyncQty,
+    roundingEnabled,
+    roundingMode,
+    roundingDistribution,
+    roundingTargetName,
+    roundingUnit,
+    autoSortMenu,
+  ],
+  () => {
+    persistDraftState();
+  },
+  { deep: true },
+);
+
 watch(
   items,
   (nextItems) => {
@@ -425,6 +757,13 @@ watch(
   },
   { deep: true },
 );
+
+watch(participants, (nextParticipants) => {
+  if (!roundingTargetName.value) return;
+  if (!nextParticipants.includes(roundingTargetName.value)) {
+    roundingTargetName.value = "";
+  }
+});
 
 const selectedItem = computed(() => {
   if (!selectedItemId.value) return null;
@@ -506,17 +845,53 @@ const subtotal = computed(() => {
   return items.value.reduce((sum, item) => sum + getItemTotal(item), 0);
 });
 
+const getItemTaxCharge = (item) => {
+  const itemTaxPercent =
+    taxServiceScope.value === "per-item"
+      ? Number(
+          item.taxPercent ?? taxPercent.value ?? DEFAULT_SETTINGS.taxPercent,
+        ) || 0
+      : Number(taxPercent.value) || 0;
+
+  return getItemTotal(item) * (itemTaxPercent / 100);
+};
+
+const getItemServiceCharge = (item) => {
+  const itemServiceType =
+    taxServiceScope.value === "per-item"
+      ? item.serviceType || serviceType.value
+      : serviceType.value;
+  const itemServiceValue =
+    taxServiceScope.value === "per-item"
+      ? Number(item.serviceValue ?? serviceValue.value ?? 0) || 0
+      : Number(serviceValue.value) || 0;
+
+  if (itemServiceType === "fixed") {
+    return itemServiceValue;
+  }
+
+  return getItemTotal(item) * (itemServiceValue / 100);
+};
+
 // Calculate tax amount
 const taxAmount = computed(() => {
-  return subtotal.value * (taxPercent.value / 100);
+  if (taxServiceScope.value === "global") {
+    return subtotal.value * ((Number(taxPercent.value) || 0) / 100);
+  }
+
+  return items.value.reduce((sum, item) => sum + getItemTaxCharge(item), 0);
 });
 
 // Calculate service charge
 const serviceAmount = computed(() => {
-  if (serviceType.value === "fixed") {
-    return parseFloat(serviceValue.value) || 0;
+  if (taxServiceScope.value === "global") {
+    if (serviceType.value === "fixed") {
+      return parseFloat(serviceValue.value) || 0;
+    }
+    return subtotal.value * ((Number(serviceValue.value) || 0) / 100);
   }
-  return subtotal.value * (serviceValue.value / 100);
+
+  return items.value.reduce((sum, item) => sum + getItemServiceCharge(item), 0);
 });
 
 // Calculate grand total
@@ -600,45 +975,97 @@ const participantTotals = computed(() => {
     0,
   );
 
-  if (totalItemsAssigned > 0) {
-    const numActiveParticipants = activeParticipants.value.length;
+  if (taxServiceScope.value === "global") {
+    if (totalItemsAssigned > 0) {
+      const numActiveParticipants = activeParticipants.value.length;
 
-    Object.keys(totals).forEach((p) => {
-      const proportion = totals[p].itemsTotal / totalItemsAssigned;
-      const hasItems = totals[p].itemsTotal > 0;
+      Object.keys(totals).forEach((p) => {
+        const proportion = totals[p].itemsTotal / totalItemsAssigned;
+        const hasItems = totals[p].itemsTotal > 0;
 
-      // Tax is always proportional
-      totals[p].taxShare = taxAmount.value * proportion;
+        totals[p].taxShare = taxAmount.value * proportion;
 
-      // Service: fixed = split equally, percent = proportional
-      if (
-        serviceType.value === "fixed" &&
-        hasItems &&
-        numActiveParticipants > 0
-      ) {
-        totals[p].serviceShare = serviceAmount.value / numActiveParticipants;
-      } else {
-        totals[p].serviceShare = serviceAmount.value * proportion;
-      }
+        if (
+          serviceType.value === "fixed" &&
+          hasItems &&
+          numActiveParticipants > 0
+        ) {
+          totals[p].serviceShare = serviceAmount.value / numActiveParticipants;
+        } else {
+          totals[p].serviceShare = serviceAmount.value * proportion;
+        }
+      });
+    }
+  } else {
+    items.value.forEach((item) => {
+      const assignedEntries = Object.entries(item.assignments || {})
+        .map(([name, qty]) => ({ name, qty: parseInt(qty) || 0 }))
+        .filter((entry) => entry.qty > 0 && totals[entry.name]);
 
-      totals[p].total =
-        totals[p].itemsTotal + totals[p].taxShare + totals[p].serviceShare;
+      if (assignedEntries.length === 0) return;
+
+      const itemAssignedTotal = assignedEntries.reduce(
+        (sum, entry) => sum + item.price * entry.qty,
+        0,
+      );
+
+      if (itemAssignedTotal <= 0) return;
+
+      const itemTaxCharge = getItemTaxCharge(item);
+      const itemServiceCharge = getItemServiceCharge(item);
+      const itemServiceType = item.serviceType || serviceType.value;
+
+      assignedEntries.forEach((entry) => {
+        const personShare = item.price * entry.qty;
+        const proportion = personShare / itemAssignedTotal;
+
+        totals[entry.name].taxShare += itemTaxCharge * proportion;
+
+        if (itemServiceType === "fixed") {
+          totals[entry.name].serviceShare +=
+            itemServiceCharge / assignedEntries.length;
+        } else {
+          totals[entry.name].serviceShare += itemServiceCharge * proportion;
+        }
+      });
     });
   }
+
+  Object.keys(totals).forEach((p) => {
+    totals[p].total =
+      totals[p].itemsTotal + totals[p].taxShare + totals[p].serviceShare;
+  });
 
   const activeTotals = Object.values(totals).filter((p) => p.total > 0);
 
   if (activeTotals.length > 0 && roundingAdjustment.value !== 0) {
-    let highestPayer = activeTotals[0];
+    if (roundingDistribution.value === "equal") {
+      const share = roundingAdjustment.value / activeTotals.length;
+      activeTotals.forEach((entry) => {
+        entry.roundingShare += share;
+        entry.total += share;
+      });
+    } else {
+      let targetEntry = activeTotals[0];
 
-    activeTotals.forEach((entry) => {
-      if (entry.total > highestPayer.total) {
-        highestPayer = entry;
+      if (roundingDistribution.value === "selected") {
+        const selectedTarget = activeTotals.find(
+          (entry) => entry.name === roundingTargetName.value,
+        );
+        if (selectedTarget) {
+          targetEntry = selectedTarget;
+        }
+      } else {
+        activeTotals.forEach((entry) => {
+          if (entry.total > targetEntry.total) {
+            targetEntry = entry;
+          }
+        });
       }
-    });
 
-    highestPayer.roundingShare += roundingAdjustment.value;
-    highestPayer.total += roundingAdjustment.value;
+      targetEntry.roundingShare += roundingAdjustment.value;
+      targetEntry.total += roundingAdjustment.value;
+    }
   }
 
   return activeTotals;
@@ -662,9 +1089,23 @@ const today = new Date().toLocaleDateString("id-ID", {
   day: "numeric",
 });
 
+const hasAllocationIssues = computed(() => {
+  return items.value.some((item) => getAllocationStatus(item).type !== "fit");
+});
+
+const ensureReadyForExport = () => {
+  if (!hasAllocationIssues.value) return true;
+
+  if (typeof window === "undefined") return true;
+  return window.confirm(
+    "Masih ada item yang statusnya belum Pas (Belum penuh/Over). Lanjutkan export?",
+  );
+};
+
 // Download as image
 const downloadAsImage = async () => {
   if (!resultRef.value) return;
+  if (!ensureReadyForExport()) return;
 
   try {
     const canvas = await html2canvas(resultRef.value, {
@@ -681,6 +1122,125 @@ const downloadAsImage = async () => {
     console.error("Error generating image:", error);
     alert("Gagal membuat gambar. Silakan coba lagi.");
   }
+};
+
+const downloadAsCSV = () => {
+  if (!ensureReadyForExport()) return;
+
+  const header = ["Peserta", "Item", "Qty", "Nominal"];
+  const lines = [header.join(",")];
+
+  participantTotals.value.forEach((person) => {
+    person.items.forEach((item) => {
+      lines.push(
+        [person.name, item.name, item.qty, Math.round(item.share)]
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(","),
+      );
+    });
+
+    if (person.taxShare) {
+      lines.push(
+        `"${person.name}","Pajak","","${Math.round(person.taxShare)}"`,
+      );
+    }
+    if (person.serviceShare) {
+      lines.push(
+        `"${person.name}","Service","","${Math.round(person.serviceShare)}"`,
+      );
+    }
+    if (person.roundingShare) {
+      lines.push(
+        `"${person.name}","Pembulatan","","${Math.round(person.roundingShare)}"`,
+      );
+    }
+
+    lines.push(`"${person.name}","TOTAL","","${Math.round(person.total)}"`);
+  });
+
+  const blob = new Blob([lines.join("\n")], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `split-bill-${new Date().toISOString().split("T")[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
+const downloadAsPDF = () => {
+  if (!ensureReadyForExport()) return;
+
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  let cursorY = 44;
+
+  doc.setFontSize(16);
+  doc.text("Split Bill", 40, cursorY);
+  cursorY += 16;
+  doc.setFontSize(10);
+  doc.text(today, 40, cursorY);
+  cursorY += 18;
+
+  participantTotals.value.forEach((person) => {
+    if (cursorY > 760) {
+      doc.addPage();
+      cursorY = 44;
+    }
+
+    doc.setFontSize(12);
+    doc.text(`${person.name} - ${formatCurrency(person.total)}`, 40, cursorY);
+    cursorY += 14;
+
+    doc.setFontSize(10);
+    person.items.forEach((item) => {
+      doc.text(
+        `• ${item.name} x${item.qty}: ${formatCurrency(item.share)}`,
+        52,
+        cursorY,
+      );
+      cursorY += 12;
+    });
+
+    if (person.taxShare > 0) {
+      doc.text(`Pajak: ${formatCurrency(person.taxShare)}`, 52, cursorY);
+      cursorY += 12;
+    }
+    if (person.serviceShare > 0) {
+      doc.text(`Service: ${formatCurrency(person.serviceShare)}`, 52, cursorY);
+      cursorY += 12;
+    }
+    if (person.roundingShare !== 0) {
+      doc.text(
+        `Pembulatan: ${formatCurrency(person.roundingShare)}`,
+        52,
+        cursorY,
+      );
+      cursorY += 12;
+    }
+
+    cursorY += 8;
+  });
+
+  cursorY += 6;
+  doc.setFontSize(11);
+  doc.text(`Subtotal: ${formatCurrency(subtotal.value)}`, 40, cursorY);
+  cursorY += 14;
+  doc.text(`Pajak: ${formatCurrency(taxAmount.value)}`, 40, cursorY);
+  cursorY += 14;
+  doc.text(`Service: ${formatCurrency(serviceAmount.value)}`, 40, cursorY);
+  cursorY += 14;
+  if (roundingAdjustment.value !== 0) {
+    doc.text(
+      `Pembulatan: ${formatCurrency(roundingAdjustment.value)}`,
+      40,
+      cursorY,
+    );
+    cursorY += 14;
+  }
+  doc.setFontSize(13);
+  doc.text(`Grand Total: ${formatCurrency(grandTotal.value)}`, 40, cursorY);
+
+  doc.save(`split-bill-${new Date().toISOString().split("T")[0]}.pdf`);
 };
 
 // Handle Enter key
@@ -895,6 +1455,28 @@ const handleParticipantEnter = (e) => {
             </div>
 
             <div class="tax-service-item span-2">
+              <div class="settings-row settings-row-wrap">
+                <label class="form-label" style="margin-bottom: 0"
+                  >Scope Pajak & Service</label
+                >
+                <div class="toggle-btns">
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: taxServiceScope === 'global' }"
+                    @click="taxServiceScope = 'global'"
+                  >
+                    Global
+                  </button>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: taxServiceScope === 'per-item' }"
+                    @click="taxServiceScope = 'per-item'"
+                  >
+                    Per Item
+                  </button>
+                </div>
+              </div>
+
               <div class="settings-row">
                 <label class="checkbox-label">
                   <input type="checkbox" v-model="autoSyncQty" />
@@ -929,6 +1511,28 @@ const handleParticipantEnter = (e) => {
                     step="100"
                     placeholder="100"
                   />
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Distribusi Pembulatan</label>
+                  <select class="form-input" v-model="roundingDistribution">
+                    <option value="highest">Pembayar Terbesar</option>
+                    <option value="equal">Rata Semua Peserta</option>
+                    <option value="selected">Peserta Tertentu</option>
+                  </select>
+                </div>
+
+                <div
+                  class="form-group"
+                  v-if="roundingDistribution === 'selected'"
+                >
+                  <label class="form-label">Peserta Target</label>
+                  <select class="form-input" v-model="roundingTargetName">
+                    <option value="">Pilih Peserta</option>
+                    <option v-for="p in participants" :key="p" :value="p">
+                      {{ p }}
+                    </option>
+                  </select>
                 </div>
               </div>
 
@@ -995,6 +1599,23 @@ const handleParticipantEnter = (e) => {
           </button>
         </div>
 
+        <div class="section-actions-row">
+          <button
+            class="btn btn-muted"
+            @click="undoLastAction"
+            :disabled="undoStack.length === 0"
+          >
+            Undo
+          </button>
+          <button
+            class="btn btn-muted"
+            @click="redoLastAction"
+            :disabled="redoStack.length === 0"
+          >
+            Redo
+          </button>
+        </div>
+
         <div class="menu-workspace" v-if="items.length > 0">
           <div class="menu-master">
             <div class="menu-panel-header">
@@ -1053,6 +1674,66 @@ const handleParticipantEnter = (e) => {
                   selectedItem.qty
                 }}
               </small>
+            </div>
+
+            <div class="detail-quick-actions">
+              <button
+                class="btn btn-muted"
+                @click="clearSelectedItemAssignments"
+              >
+                Reset Assignment Item
+              </button>
+              <button
+                class="btn btn-muted"
+                @click="zeroAllParticipantsForSelectedItem"
+              >
+                Set Qty Peserta 0
+              </button>
+            </div>
+
+            <div
+              class="item-scope-settings"
+              v-if="taxServiceScope === 'per-item'"
+            >
+              <div class="form-group">
+                <label class="form-label">Pajak Item (%)</label>
+                <input
+                  type="number"
+                  class="form-input"
+                  v-model="selectedItem.taxPercent"
+                  min="0"
+                  max="100"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Service Item</label>
+                <div class="input-with-toggle">
+                  <input
+                    type="number"
+                    class="form-input"
+                    v-model="selectedItem.serviceValue"
+                    min="0"
+                  />
+                  <div class="toggle-btns">
+                    <button
+                      class="toggle-btn"
+                      :class="{
+                        active: selectedItem.serviceType === 'percent',
+                      }"
+                      @click="selectedItem.serviceType = 'percent'"
+                    >
+                      %
+                    </button>
+                    <button
+                      class="toggle-btn"
+                      :class="{ active: selectedItem.serviceType === 'fixed' }"
+                      @click="selectedItem.serviceType = 'fixed'"
+                    >
+                      Rp
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="menu-item-main menu-detail-action-row">
@@ -1198,14 +1879,23 @@ const handleParticipantEnter = (e) => {
             <span>{{ formatCurrency(subtotal) }}</span>
           </div>
           <div class="summary-row">
-            <span>Pajak ({{ taxPercent }}%)</span>
+            <span>
+              Pajak
+              {{
+                taxServiceScope === "global" ? `(${taxPercent}%)` : "(Per Item)"
+              }}
+            </span>
             <span>{{ formatCurrency(taxAmount) }}</span>
           </div>
           <div class="summary-row" v-if="serviceAmount > 0">
             <span
               >Service
               {{
-                serviceType === "fixed" ? "(Fixed)" : `(${serviceValue}%)`
+                taxServiceScope === "global"
+                  ? serviceType === "fixed"
+                    ? "(Fixed)"
+                    : `(${serviceValue}%)`
+                  : "(Per Item)"
               }}</span
             >
             <span>{{ formatCurrency(serviceAmount) }}</span>
@@ -1222,9 +1912,41 @@ const handleParticipantEnter = (e) => {
       </div>
 
       <div class="download-section">
-        <button class="btn download-btn" @click="downloadAsImage">
-          📥 Download Sebagai Gambar
-        </button>
+        <div class="download-actions-grid">
+          <button class="btn download-btn" @click="downloadAsImage">
+            📥 Gambar
+          </button>
+          <button class="btn btn-muted" @click="downloadAsPDF">📄 PDF</button>
+          <button class="btn btn-muted" @click="downloadAsCSV">🧾 CSV</button>
+          <button class="btn btn-muted" @click="saveCurrentStateToHistory">
+            💾 Simpan Riwayat
+          </button>
+          <button class="btn btn-muted" @click="exportShareLink">
+            🔗 Share Link
+          </button>
+        </div>
+        <p class="share-link" v-if="shareLink">
+          {{ shareLink }}
+        </p>
+      </div>
+
+      <div class="card history-card" v-if="historyEntries.length > 0">
+        <h3 class="card-title">
+          <span class="icon">🕘</span>
+          Riwayat Transaksi
+        </h3>
+        <div class="history-list">
+          <div
+            class="history-row"
+            v-for="entry in historyEntries"
+            :key="entry.id"
+          >
+            <span>{{ entry.label }}</span>
+            <button class="btn btn-muted" @click="loadHistoryEntry(entry)">
+              Buka
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
