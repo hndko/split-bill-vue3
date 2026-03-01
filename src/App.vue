@@ -17,6 +17,7 @@ const roundingMode = ref("nearest"); // 'nearest' | 'up' | 'down'
 const roundingUnit = ref(100);
 const selectedItemId = ref(null);
 const participantSearch = ref("");
+const autoSortMenu = ref(true);
 const resultRef = ref(null);
 const showGuide = ref(false);
 
@@ -228,6 +229,10 @@ const sortedMenuItems = computed(() => {
 
     return a.name.localeCompare(b.name, "id-ID");
   });
+});
+
+const displayedMenuItems = computed(() => {
+  return autoSortMenu.value ? sortedMenuItems.value : items.value;
 });
 
 // Calculate subtotal per item
@@ -691,15 +696,24 @@ const handleParticipantEnter = (e) => {
         <div class="menu-workspace" v-if="items.length > 0">
           <div class="menu-master">
             <div class="menu-panel-header">
-              <h4>Daftar Menu</h4>
-              <small>Pilih menu untuk atur assignment</small>
+              <div class="menu-panel-toprow">
+                <h4>Daftar Menu</h4>
+                <label class="mini-toggle">
+                  <input type="checkbox" v-model="autoSortMenu" />
+                  <span>Urutkan Otomatis</span>
+                </label>
+              </div>
+              <small>
+                Pilih menu untuk atur assignment
+                {{ autoSortMenu ? "(Prioritas)" : "(Urutan Input)" }}
+              </small>
             </div>
 
             <div class="menu-master-list">
               <button
                 class="menu-master-item"
                 :class="{ active: selectedItemId === item.id }"
-                v-for="item in sortedMenuItems"
+                v-for="item in displayedMenuItems"
                 :key="item.id"
                 @click="selectedItemId = item.id"
               >

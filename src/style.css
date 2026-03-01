@@ -388,6 +388,13 @@ body {
   margin-bottom: 10px;
 }
 
+.menu-panel-toprow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .menu-panel-header h4 {
   font-size: 0.92rem;
   font-weight: 700;
@@ -396,6 +403,24 @@ body {
 .menu-panel-header small {
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.mini-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mini-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .menu-master-list {
