@@ -1,7 +1,24 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+
+let jsPDFCtor = null;
+let html2canvasFn = null;
+
+const getJsPDFConstructor = async () => {
+  if (jsPDFCtor) return jsPDFCtor;
+
+  const module = await import("jspdf");
+  jsPDFCtor = module.jsPDF;
+  return jsPDFCtor;
+};
+
+const getHtml2Canvas = async () => {
+  if (html2canvasFn) return html2canvasFn;
+
+  const module = await import("html2canvas");
+  html2canvasFn = module.default;
+  return html2canvasFn;
+};
 
 const STORAGE_KEYS = {
   autoSortMenu: "split-bill:auto-sort-menu",
@@ -1108,6 +1125,7 @@ const downloadAsImage = async () => {
   if (!ensureReadyForExport()) return;
 
   try {
+    const html2canvas = await getHtml2Canvas();
     const canvas = await html2canvas(resultRef.value, {
       backgroundColor: "#1e293b",
       scale: 2,
@@ -1168,10 +1186,12 @@ const downloadAsCSV = () => {
   URL.revokeObjectURL(link.href);
 };
 
-const downloadAsPDF = () => {
+const downloadAsPDF = async () => {
   if (!ensureReadyForExport()) return;
 
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const JsPDF = await getJsPDFConstructor();
+
+  const doc = new JsPDF({ unit: "pt", format: "a4" });
   let cursorY = 44;
 
   doc.setFontSize(16);
