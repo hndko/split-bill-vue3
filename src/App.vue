@@ -192,6 +192,44 @@ const getAllocationStatus = (item) => {
   return { label: "Belum penuh", type: "under" };
 };
 
+const getAllocationRank = (item) => {
+  const allocatedQty = getTotalAssignedQty(item);
+
+  if (allocatedQty > item.qty) {
+    return 0;
+  }
+
+  if (allocatedQty < item.qty) {
+    return 1;
+  }
+
+  return 2;
+};
+
+const getAllocationSeverity = (item) => {
+  return Math.abs(getTotalAssignedQty(item) - item.qty);
+};
+
+const sortedMenuItems = computed(() => {
+  return [...items.value].sort((a, b) => {
+    const rankA = getAllocationRank(a);
+    const rankB = getAllocationRank(b);
+
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
+
+    const severityA = getAllocationSeverity(a);
+    const severityB = getAllocationSeverity(b);
+
+    if (severityA !== severityB) {
+      return severityB - severityA;
+    }
+
+    return a.name.localeCompare(b.name, "id-ID");
+  });
+});
+
 // Calculate subtotal per item
 const getItemTotal = (item) => {
   return item.price * item.qty;
@@ -661,7 +699,7 @@ const handleParticipantEnter = (e) => {
               <button
                 class="menu-master-item"
                 :class="{ active: selectedItemId === item.id }"
-                v-for="item in items"
+                v-for="item in sortedMenuItems"
                 :key="item.id"
                 @click="selectedItemId = item.id"
               >
