@@ -41,6 +41,8 @@ const SERVICE_TYPES = ["percent", "fixed"];
 const TAX_SERVICE_SCOPES = ["global", "per-item"];
 const ROUNDING_DISTRIBUTIONS = ["highest", "equal", "selected"];
 const HISTORY_LIMIT = 20;
+const QTY_SCALE = 1000;
+const QTY_EPSILON = 1 / QTY_SCALE;
 const DEFAULT_SETTINGS = {
   taxPercent: 10,
   serviceType: "percent",
@@ -227,6 +229,23 @@ const historyEntries = ref(getStoredJson(STORAGE_KEYS.historyList, []));
 const undoStack = ref([]);
 const redoStack = ref([]);
 const shareLink = ref("");
+const sharingTargetParticipants = ref([]);
+
+const normalizeAssignedQty = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.round(parsed * QTY_SCALE) / QTY_SCALE;
+};
+
+const isQtyEqual = (a, b) => {
+  return Math.abs(a - b) < QTY_EPSILON;
+};
+
+const formatQtyValue = (value) => {
+  const qty = normalizeAssignedQty(value);
+  if (Number.isInteger(qty)) return String(qty);
+  return qty.toFixed(2).replace(/\.00$/, "").replace(/0$/, "");
+};
 
 if (!ROUNDING_MODES.includes(roundingMode.value)) {
   roundingMode.value = "nearest";
@@ -333,7 +352,7 @@ const applyStateSnapshot = (snapshot) => {
     items.value.forEach((item) => {
       item.qty = Math.max(
         Object.values(item.assignments || {}).reduce(
-          (sum, qty) => sum + (parseInt(qty) || 0),
+          (sum, qty) => sum + normalizeAssignedQty(qty),
           0,
         ),
         1,
@@ -442,10 +461,70 @@ const clearSelectedItemAssignments = () => {
   if (autoSyncQty.value) {
     target.qty = 1;
   }
+
+  sharingTargetParticipants.value = [];
 };
 
 const zeroAllParticipantsForSelectedItem = () => {
   clearSelectedItemAssignments();
+};
+
+const toggleSharingTargetParticipant = (name) => {
+  if (!name) return;
+
+  if (sharingTargetParticipants.value.includes(name)) {
+    sharingTargetParticipants.value = sharingTargetParticipants.value.filter(
+      (p) => p !== name,
+    );
+    return;
+  }
+
+  sharingTargetParticipants.value = [...sharingTargetParticipants.value, name];
+};
+
+const selectAllSharingTargets = () => {
+  sharingTargetParticipants.value = [...filteredParticipants.value];
+};
+
+const clearSharingTargets = () => {
+  sharingTargetParticipants.value = [];
+};
+
+const applySharingToSelectedItem = () => {
+  if (!selectedItem.value) return;
+
+  const selectedTargets = sharingTargetParticipants.value.filter((name) =>
+    participants.value.includes(name),
+  );
+
+  if (selectedTargets.length === 0) {
+    alert("Pilih minimal 1 peserta untuk membagi menu sharing.");
+    return;
+  }
+
+  const totalQty = Math.max(normalizeAssignedQty(selectedItem.value.qty), 0);
+  if (totalQty <= 0) return;
+
+  const totalUnits = Math.max(1, Math.round(totalQty * QTY_SCALE));
+  const baseUnits = Math.floor(totalUnits / selectedTargets.length);
+  let remainingUnits = totalUnits - baseUnits * selectedTargets.length;
+
+  pushUndoSnapshot();
+  selectedItem.value.assignments = {};
+
+  selectedTargets.forEach((name) => {
+    const shareUnits = baseUnits + (remainingUnits > 0 ? 1 : 0);
+    if (remainingUnits > 0) {
+      remainingUnits -= 1;
+    }
+
+    const shareQty = shareUnits / QTY_SCALE;
+    if (shareQty > 0) {
+      selectedItem.value.assignments[name] = shareQty;
+    }
+  });
+
+  syncItemQtyWithAssignments(selectedItem.value);
 };
 
 const applyResetAllStoredPreferences = () => {
@@ -574,12 +653,12 @@ const removeParticipant = (name) => {
 
 // Assignment helpers
 const getAssignedQty = (item, participant) => {
-  return item.assignments?.[participant] || 0;
+  return normalizeAssignedQty(item.assignments?.[participant]);
 };
 
 const getTotalAssignedQty = (item) => {
   return Object.values(item.assignments || {}).reduce(
-    (sum, qty) => sum + (parseInt(qty) || 0),
+    (sum, qty) => sum + normalizeAssignedQty(qty),
     0,
   );
 };
@@ -622,7 +701,7 @@ const decrementParticipantQty = (item, participant) => {
   if (currentQty <= 0) return;
 
   pushUndoSnapshot();
-  if (currentQty === 1) {
+  if (currentQty <= 1) {
     delete item.assignments[participant];
     syncItemQtyWithAssignments(item);
     return;
@@ -776,10 +855,20 @@ watch(
 );
 
 watch(participants, (nextParticipants) => {
-  if (!roundingTargetName.value) return;
-  if (!nextParticipants.includes(roundingTargetName.value)) {
+  if (
+    roundingTargetName.value &&
+    !nextParticipants.includes(roundingTargetName.value)
+  ) {
     roundingTargetName.value = "";
   }
+
+  sharingTargetParticipants.value = sharingTargetParticipants.value.filter(
+    (p) => nextParticipants.includes(p),
+  );
+});
+
+watch(selectedItemId, () => {
+  sharingTargetParticipants.value = [];
 });
 
 const selectedItem = computed(() => {
@@ -799,11 +888,11 @@ const filteredParticipants = computed(() => {
 const getAllocationStatus = (item) => {
   const allocatedQty = getTotalAssignedQty(item);
 
-  if (allocatedQty > item.qty) {
+  if (allocatedQty > item.qty + QTY_EPSILON) {
     return { label: "Over", type: "over" };
   }
 
-  if (allocatedQty === item.qty) {
+  if (isQtyEqual(allocatedQty, item.qty)) {
     return { label: "Pas", type: "fit" };
   }
 
@@ -813,11 +902,11 @@ const getAllocationStatus = (item) => {
 const getAllocationRank = (item) => {
   const allocatedQty = getTotalAssignedQty(item);
 
-  if (allocatedQty > item.qty) {
+  if (allocatedQty > item.qty + QTY_EPSILON) {
     return 0;
   }
 
-  if (allocatedQty < item.qty) {
+  if (!isQtyEqual(allocatedQty, item.qty)) {
     return 1;
   }
 
@@ -946,7 +1035,7 @@ const activeParticipants = computed(() => {
   const active = new Set();
   items.value.forEach((item) => {
     Object.entries(item.assignments || {}).forEach(([name, qty]) => {
-      if ((parseInt(qty) || 0) > 0) {
+      if (normalizeAssignedQty(qty) > 0) {
         active.add(name);
       }
     });
@@ -973,7 +1062,7 @@ const participantTotals = computed(() => {
   // Calculate items per person
   items.value.forEach((item) => {
     Object.entries(item.assignments || {}).forEach(([name, qty]) => {
-      const assignedQty = parseInt(qty) || 0;
+      const assignedQty = normalizeAssignedQty(qty);
       if (!totals[name] || assignedQty <= 0) return;
 
       const share = item.price * assignedQty;
@@ -1016,7 +1105,7 @@ const participantTotals = computed(() => {
   } else {
     items.value.forEach((item) => {
       const assignedEntries = Object.entries(item.assignments || {})
-        .map(([name, qty]) => ({ name, qty: parseInt(qty) || 0 }))
+        .map(([name, qty]) => ({ name, qty: normalizeAssignedQty(qty) }))
         .filter((entry) => entry.qty > 0 && totals[entry.name]);
 
       if (assignedEntries.length === 0) return;
@@ -1214,7 +1303,7 @@ const downloadAsPDF = async () => {
     doc.setFontSize(10);
     person.items.forEach((item) => {
       doc.text(
-        `• ${item.name} x${item.qty}: ${formatCurrency(item.share)}`,
+        `• ${item.name} x${formatQtyValue(item.qty)}: ${formatCurrency(item.share)}`,
         52,
         cursorY,
       );
@@ -1651,7 +1740,6 @@ const handleParticipantEnter = (e) => {
                 {{ autoSortMenu ? "(Prioritas)" : "(Urutan Input)" }}
               </small>
             </div>
-
             <div class="menu-master-list">
               <button
                 class="menu-master-item"
@@ -1677,8 +1765,8 @@ const handleParticipantEnter = (e) => {
                 <div class="menu-master-meta">
                   <small>Qty {{ item.qty }}</small>
                   <small
-                    >Alokasi {{ getTotalAssignedQty(item) }}/{{
-                      item.qty
+                    >Alokasi {{ formatQtyValue(getTotalAssignedQty(item)) }}/{{
+                      formatQtyValue(item.qty)
                     }}</small
                   >
                 </div>
@@ -1690,8 +1778,9 @@ const handleParticipantEnter = (e) => {
             <div class="menu-panel-header">
               <h4>{{ selectedItem.name }}</h4>
               <small>
-                Dialokasikan {{ getTotalAssignedQty(selectedItem) }}/{{
-                  selectedItem.qty
+                Dialokasikan
+                {{ formatQtyValue(getTotalAssignedQty(selectedItem)) }}/{{
+                  formatQtyValue(selectedItem.qty)
                 }}
               </small>
             </div>
@@ -1708,6 +1797,14 @@ const handleParticipantEnter = (e) => {
                 @click="zeroAllParticipantsForSelectedItem"
               >
                 Set Qty Peserta 0
+              </button>
+              <button
+                class="btn btn-muted"
+                @click="applySharingToSelectedItem"
+                :disabled="sharingTargetParticipants.length === 0"
+                title="Bagi rata qty menu ke peserta yang dipilih"
+              >
+                Bagi Rata (Sharing)
               </button>
             </div>
 
@@ -1795,13 +1892,36 @@ const handleParticipantEnter = (e) => {
               />
             </div>
 
+            <div class="sharing-target-tools" v-if="participants.length > 0">
+              <small>
+                Peserta sharing dipilih: {{ sharingTargetParticipants.length }}
+              </small>
+              <div class="sharing-target-actions">
+                <button class="btn btn-muted" @click="selectAllSharingTargets">
+                  Pilih Semua Terlihat
+                </button>
+                <button class="btn btn-muted" @click="clearSharingTargets">
+                  Kosongkan Pilihan
+                </button>
+              </div>
+            </div>
+
             <div class="menu-detail-list" v-if="participants.length > 0">
               <div
                 class="assign-row"
                 v-for="p in filteredParticipants"
                 :key="p"
               >
-                <span class="assign-name">{{ p }}</span>
+                <div class="assign-name-wrap">
+                  <label class="assign-share-check">
+                    <input
+                      type="checkbox"
+                      :checked="sharingTargetParticipants.includes(p)"
+                      @change="toggleSharingTargetParticipant(p)"
+                    />
+                    <span class="assign-name">{{ p }}</span>
+                  </label>
+                </div>
                 <div class="assign-qty-control">
                   <button
                     class="qty-btn"
@@ -1812,14 +1932,15 @@ const handleParticipantEnter = (e) => {
                     -
                   </button>
                   <span class="qty-value">{{
-                    getAssignedQty(selectedItem, p)
+                    formatQtyValue(getAssignedQty(selectedItem, p))
                   }}</span>
                   <button
                     class="qty-btn"
                     @click="incrementParticipantQty(selectedItem, p)"
                     :disabled="
                       !autoSyncQty &&
-                      getTotalAssignedQty(selectedItem) >= selectedItem.qty
+                      getTotalAssignedQty(selectedItem) >=
+                        selectedItem.qty - QTY_EPSILON
                     "
                     title="Tambah qty peserta"
                   >
@@ -1873,7 +1994,7 @@ const handleParticipantEnter = (e) => {
             <ul class="result-person-items">
               <li v-for="(item, i) in p.items" :key="i">
                 <span>
-                  {{ item.name }} <small>x{{ item.qty }}</small>
+                  {{ item.name }} <small>x{{ formatQtyValue(item.qty) }}</small>
                 </span>
                 <span>{{ formatCurrency(item.share) }}</span>
               </li>

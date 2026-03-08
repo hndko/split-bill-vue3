@@ -598,6 +598,30 @@ body {
   margin-bottom: 10px;
 }
 
+.sharing-target-tools {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sharing-target-tools small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sharing-target-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .menu-detail-list {
   border-top: 1px dashed var(--border);
   padding-top: 10px;
@@ -666,7 +690,7 @@ body {
 }
 
 .qty-value {
-  min-width: 20px;
+  min-width: 40px;
   text-align: center;
   font-size: 0.86rem;
   font-weight: 700;
@@ -715,6 +739,27 @@ body {
 .assign-name {
   font-size: 0.86rem;
   color: var(--text);
+}
+
+.assign-name-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.assign-share-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.assign-share-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .result-card {
@@ -994,6 +1039,11 @@ body {
 
   .menu-item-main {
     flex-wrap: wrap;
+  }
+
+  .sharing-target-tools {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
